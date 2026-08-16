@@ -3,7 +3,8 @@
 // 入力はユーザーにも見えている view / offer だけ。山の順番、他家の手牌、
 // 王牌の未公開部分は読まず、DecisionEvaluator の分析結果だけを文章化する。
 import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=18';
-import { isDragon, isHonor, tileName } from './tiles.js';
+import { isDragon, isHonor, numOf, doraFromIndicator, tileName } from './tiles.js';
+import { decomposeBlocks, evaluateHandPlans, tileRetentionValue } from './hand-plans.js';
 
 export const DECISION_COACH_VERSION = 'v2-candidate-comparison-coach';
 
@@ -156,6 +157,82 @@ function pressureCautionSentence(view, analysis) {
   return `${labels.join('・')}に手が整った気配${evidence}があります。リーチはまだ入っていませんが、同じ進み方なら通りやすい牌から先に切ります。`;
 }
 
+function coachPlanContext(view) {
+  return {
+    seatWind: view?.seatWind,
+    roundWind: view?.roundWind,
+    doraKinds: (view?.public?.doraIndicators ?? []).map(tile => doraFromIndicator(tile.kind)),
+    phase: 'early',
+  };
+}
+
+function handAllOf(view) {
+  return view?.drawn ? [...(view.hand ?? []), view.drawn] : [...(view?.hand ?? [])];
+}
+
+// 「どの形を伸ばそうとしているか」: 打牌後の骨組みから未完成ブロックと完成牌を言う
+function blockGrowthSentence(view, action, selectedMetrics) {
+  if (!Number.isInteger(selectedMetrics?.shanten) || selectedMetrics.shanten < 1) return '';
+  const rest = handAllOf(view);
+  if (Number.isInteger(action?.index)) rest.splice(action.index, 1);
+  const { chosen } = decomposeBlocks(rest, coachPlanContext(view));
+  const parts = [];
+  for (const block of chosen) {
+    if (block.type === 'taatsu') {
+      const [low, high] = block.kinds;
+      const waits = [];
+      if (numOf(low) > 1) waits.push(low - 1);
+      if (numOf(high) < 9) waits.push(high + 1);
+      parts.push(`${tileName(low)}${tileName(high)}（${waits.map(kind => tileName(kind)).join('か')}で完成）`);
+    } else if (block.type === 'kanchan') {
+      parts.push(`${tileName(block.kinds[0])}${tileName(block.kinds[1])}（${tileName(block.kinds[0] + 1)}で完成）`);
+    }
+  }
+  const unique = [...new Set(parts)];
+  if (unique.length === 0) return '';
+  return `伸ばしたい形は ${unique.slice(0, 3).join('、')}。`;
+}
+
+// 「何を受け入れようとしているか」: 進む牌を名前で言う
+function acceptanceSentence(metrics) {
+  const byKind = metrics?.ukeireByKind;
+  if (!Array.isArray(byKind) || byKind.length === 0 || !Number.isFinite(metrics?.ukeirePhysical)) return '';
+  const top = [...byKind].sort((left, right) => right.remaining - left.remaining).slice(0, 5);
+  const names = top.map(item => tileName(item.kind)).join('・');
+  const suffix = byKind.length > top.length ? `など${byKind.length}種類` : '';
+  return `引いて嬉しいのは${names}${suffix}、見えている範囲で合計${metrics.ukeirePhysical}枚です。`;
+}
+
+// 「これを狙うならこっち」: 第二プランごとに最適な分岐打牌を出す
+function planAlternativeParts(view, analysis) {
+  const selected = selectedCandidate(analysis);
+  const selectedMetrics = selected?.metrics;
+  const selectedTile = candidateTile(view, selected);
+  if (!selectedMetrics?.planEvaluation) return [];
+  const planContext = coachPlanContext(view);
+  const handAll = handAllOf(view);
+  const plans = evaluateHandPlans(handAll, view?.melds ?? [], planContext);
+  const mainPlan = selectedMetrics.planEvaluation.topPlans?.[0]?.code;
+  const parts = [];
+  for (const plan of plans) {
+    if (plan.code === mainPlan || plan.weight < 0.3) continue;
+    let best = null;
+    for (const candidate of analysis?.candidates ?? []) {
+      if (candidate?.action?.action !== 'discard') continue;
+      if (candidate.metrics?.shanten !== selectedMetrics.shanten) continue;
+      const tile = candidateTile(view, candidate);
+      if (!tile) continue;
+      const value = tileRetentionValue(tile, [plan], handAll, planContext).retention;
+      if (!best || value < best.value) best = { tile, value };
+    }
+    if (best && selectedTile && (best.tile.kind !== selectedTile.kind || best.tile.red !== selectedTile.red)) {
+      parts.push(`${PLAN_LABELS[plan.code] ?? plan.code}を狙うなら、${tileName(best.tile.kind, best.tile.red)}を切る分岐もあります。`);
+    }
+    if (parts.length >= 2) break;
+  }
+  return parts;
+}
+
 function planHeadlineSentences(selected) {
   const planEvaluation = selected?.metrics?.planEvaluation;
   const top = planEvaluation?.topPlans?.[0]?.code;
@@ -232,10 +309,8 @@ function comparisonParts(view, analysis) {
     }
     if (!Number.isFinite(metrics.ukeirePhysical) || !Number.isFinite(selectedMetrics.ukeirePhysical)) continue;
     const delta = selectedMetrics.ukeirePhysical - metrics.ukeirePhysical;
-    if (delta > 0) {
-      parts.push(`${name}を切る案もテンパイまでの距離は同じですが、次に手が前に進む牌は${metrics.ukeirePhysical}枚です。${selectedName}を切ると${selectedMetrics.ukeirePhysical}枚で、${delta}枚多く残るため、${selectedName}を選びます。`);
-      continue;
-    }
+    // 受け入れが狭いだけの案は列挙しない(受け入れの中身は本文で説明済み)
+    if (delta > 0) continue;
     // v12: 受け入れ同数の分かれ目はプラン価値で説明する
     const altPlan = metrics.planEvaluation;
     const selPlan = selectedMetrics.planEvaluation;
@@ -269,14 +344,13 @@ function comparisonParts(view, analysis) {
       parts.push(`${name}を切る案も手の進み方は同じですが、相手には${selectedName}の方が通りやすいため、先に${selectedName}を処理します。`);
       continue;
     }
-    if (delta === 0) {
-      parts.push(`${name}を切る案も、手の進み方は同じです。この比較だけでは優劣を付けられません。`);
-    }
   }
   if (slowerNames.length === 1) {
-    parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため選びません。`);
-  } else if (slowerNames.length > 1) {
-    parts.push(`${slowerNames.join('・')}を切る案は、いずれも${selectedName}を切るよりテンパイが遠くなるため選びません。`);
+    parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);
+  } else if (slowerNames.length >= 2 && slowerNames.length <= 3) {
+    parts.push(`${slowerNames.join('・')}を切る案は、テンパイが遠くなるため外しています。`);
+  } else if (slowerNames.length > 3) {
+    parts.push('残りの牌は、切るとテンパイが遠くなるため候補から外しています。');
   }
   return parts;
 }
@@ -334,14 +408,17 @@ function turnExplanationParts(view, analysis) {
         : metrics.shanten === 1
           ? 'あと1枚、必要な形ができればテンパイです'
           : 'テンパイまではまだ距離があります';
-      sentences.push(`${distance}。次に引いて手が前に進む牌は、見えている範囲で${metrics.ukeirePhysical}枚あります。`);
+      const acceptance = acceptanceSentence(metrics);
+      sentences.push(`${distance}。${acceptance || `次に引いて手が前に進む牌は、見えている範囲で${metrics.ukeirePhysical}枚あります。`}`);
     }
   }
-  if (context) sentences.push(`判断時点は${phaseLabel(phaseFact?.value)}、${context}です。`);
   const comparisons = action?.action === 'discard' ? comparisonParts(view, analysis) : [];
-  // v12: 本線プランと点棒バイアスを冒頭に置き、比較→距離→状況の順で読ませる
   const planHead = action?.action === 'discard' ? planHeadlineSentences(selected) : [];
-  return [...planHead, ...comparisons, ...sentences];
+  // 狙い(伸ばす形)→選んだ理由→受け入れ→意味のある同格比較→別プランへの分岐→状況、の順で読ませる
+  const growth = action?.action === 'discard' ? blockGrowthSentence(view, action, metrics) : '';
+  const alternatives = action?.action === 'discard' ? planAlternativeParts(view, analysis) : [];
+  const tail = context ? [`判断時点は${phaseLabel(phaseFact?.value)}、${context}です。`] : [];
+  return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...tail];
 }
 
 function claimExplanation(view, offer, analysis) {

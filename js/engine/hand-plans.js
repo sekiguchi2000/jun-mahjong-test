@@ -162,15 +162,8 @@ export function decomposeBlocks(handAll, context = {}) {
       blocks.push({ type: 'taatsu', kinds: [kind, kind + 1], quality: edge ? 0.7 : 0.9 });
     }
   }
-  // 嵌張
-  for (let kind = 0; kind < KIND_COUNT - 2; kind++) {
-    if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 2)) continue;
-    while (work[kind] >= 1 && work[kind + 2] >= 1) {
-      work[kind]--; work[kind + 2]--;
-      blocks.push({ type: 'kanchan', kinds: [kind, kind + 2], quality: 0.7 });
-    }
-  }
-  // 対子(1組目=雀頭候補0.8、2組目以降0.5、役の無い字牌対子0.35)
+  // 対子(1組目=雀頭候補0.8、2組目以降0.5、役の無い字牌対子0.35)。
+  // 嵌張より先に取る: 2244mは嵌張2つでなく対子2つ(雀頭+シャンポン受け)と見るのが自然
   let pairRank = 0;
   for (let kind = 0; kind < KIND_COUNT; kind++) {
     if (work[kind] >= 2) {
@@ -180,6 +173,14 @@ export function decomposeBlocks(handAll, context = {}) {
       else quality = pairRank === 0 ? 0.8 : 0.5;
       pairRank++;
       blocks.push({ type: 'pair', kinds: [kind, kind], quality });
+    }
+  }
+  // 嵌張
+  for (let kind = 0; kind < KIND_COUNT - 2; kind++) {
+    if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 2)) continue;
+    while (work[kind] >= 1 && work[kind + 2] >= 1) {
+      work[kind]--; work[kind + 2]--;
+      blocks.push({ type: 'kanchan', kinds: [kind, kind + 2], quality: 0.7 });
     }
   }
 

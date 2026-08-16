@@ -511,7 +511,8 @@ function suitPressure(tile, signals) {
   if (suit === null) return { penalty: 0, signals: [] };
   const matched = signals.filter(signal => signal.suit === suit);
   return {
-    penalty: matched.reduce((sum, signal) => sum + (signal.confidence === 'B' ? -1.25 : -0.75), 0),
+    // v12.5: プラン価値(±4)と同じ土俵で効くよう再校正。B=はっきりした染め気配、C=弱い気配
+    penalty: matched.reduce((sum, signal) => sum + (signal.confidence === 'B' ? -3 : -1.5), 0),
     signals: matched,
   };
 }
