@@ -2552,6 +2552,12 @@ class UI {
 // ============ 画面遷移 ============
 function show(name) {
   for (const s of ['title', 'rules', 'game']) $(`#screen-${s}`).classList.toggle('hidden', s !== name);
+  // 「あれ?」ボタンはtransform祖先の影響を避けるためbody直下へ置き、対局画面と連動して出す
+  const areButton = $('#are-report-button');
+  if (areButton) {
+    if (areButton.parentElement !== document.body) document.body.appendChild(areButton);
+    areButton.classList.toggle('hidden', name !== 'game');
+  }
 }
 
 function initTitleAtmosphere() {

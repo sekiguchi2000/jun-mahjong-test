@@ -16,6 +16,7 @@
   cursor: pointer;
   white-space: nowrap;
 }
+.are-report-button.hidden { display: none; }
 .are-report-button:hover { background: rgba(24, 40, 58, 0.9); }
 .are-report-button:active { transform: translateY(1px); }
 .are-report-button[data-flash='1'] { border-color: #9fd48f; color: #cfe9c4; }

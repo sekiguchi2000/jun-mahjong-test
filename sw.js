@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v45-are-report-ui';
+const CACHE = 'jun-mahjong-v46-are-report-fixed';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -15,8 +15,8 @@ const VOICE_FILES = ['hanzo', 'joe', 'himeko']
 const ASSETS = [
   '.', 'index.html', 'css/style.css?v=12', 'css/table-v9.css?v=16',
   'css/tokens-v15.css?v=15', 'css/learning-modes-v15.css?v=17', 'css/product-ui-v16.css?v=1',
-  'css/product-ui-v17.css?v=1', 'css/are-report-v1.css?v=2', 'css/win-cinematic-v1.css?v=3', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=1', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=4', 'manifest.webmanifest',
-  'js/ui/main.js?v=41', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
+  'css/product-ui-v17.css?v=1', 'css/are-report-v1.css?v=3', 'css/win-cinematic-v1.css?v=3', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=1', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=4', 'manifest.webmanifest',
+  'js/ui/main.js?v=42', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
   'js/vendor/three/three.module.js', 'js/vendor/three/three.core.js',
   'js/vendor/three/addons/geometries/RoundedBoxGeometry.js',
   'js/ui/win-presentation.js?v=3',
