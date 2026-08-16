@@ -127,6 +127,19 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     }
   }
 
+  // --- トイトイ: ポン系副露があり対子が並ぶ手 (カルテ8号) ---
+  const ponMelds = melds.filter(meld =>
+    meld?.type === 'pon' || meld?.type === 'minkan' || meld?.kanOrigin).length;
+  if (ponMelds >= 1 && pairKinds.length >= 3) {
+    plans.push({
+      code: 'TOITOI',
+      pairKinds,
+      weight: Math.min(1, 0.35 + 0.2 * (ponMelds - 1) + 0.15 * (pairKinds.length - 3)),
+      value: 1.5,
+      notes: [],
+    });
+  }
+
   return plans;
 }
 
@@ -222,6 +235,8 @@ function planSupportForTile(plan, tile, counts, context) {
       return { support: 0, notes: [] };
     case 'CHIITOI':
       return counts[kind] >= 2 ? { support: 0.8, notes: [] } : { support: 0, notes: [] };
+    case 'TOITOI':
+      return counts[kind] >= 2 ? { support: 0.9, notes: [] } : { support: 0, notes: [] };
     default:
       return { support: 0, notes: [] };
   }
@@ -256,8 +271,11 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
     if (block.kinds.includes(kind)) blockQuality = Math.max(blockQuality, block.quality);
   }
   if (blockQuality > 0) {
-    retention += blockQuality * 0.9;
-    if (blockQuality >= 0.9) notes.add('BLOCK_CORE');
+    // 完成した面子(暗刻・順子)の構成牌は原則不可侵。ターツ・雀頭はやや弱い保護
+    const completeSet = chosen.some(block =>
+      (block.type === 'set' || block.type === 'run') && block.kinds.includes(kind));
+    retention += completeSet ? 1.7 : blockQuality * 0.9;
+    if (completeSet || blockQuality >= 0.9) notes.add('BLOCK_CORE');
   }
 
   // --- 孤立役牌の見切り(カルテ2号) ---
@@ -285,9 +303,9 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
     }
   }
 
-  // 赤牌そのものは常に高価値
+  // 赤牌そのものは常に高価値(確定1翻)。形の価値に上乗せし、受け入れ数枚差で手放さない
   if (tile.red) {
-    retention = Math.max(retention, 1.2);
+    retention = Math.max(retention + 0.6, 1.7);
     notes.add('RED_TILE');
   }
 

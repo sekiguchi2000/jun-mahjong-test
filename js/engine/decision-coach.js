@@ -118,6 +118,7 @@ const PLAN_LABELS = {
   HONITSU: 'ホンイツ',
   CHANTA: 'チャンタ',
   CHIITOI: '七対子',
+  TOITOI: 'トイトイ（対子を刻子に育てる）',
 };
 
 const PLAN_NOTE_PHRASES = {
@@ -431,6 +432,9 @@ function claimExplanation(view, offer, analysis) {
     return 'あがりを選べます。点棒と順位の条件を満たすので、ここで終わらせます。';
   }
   if (!action) {
+    if (reason === 'ANKO_ALREADY_COMPLETE') {
+      return 'その牌は手の中で3枚そろっていて、面子として完成しています。鳴くと完成形を崩すだけなので見送ります。';
+    }
     if (reason === 'KEEP_CLOSED') {
       return '今鳴くと手の形が固定されます。はっきりした得が確認できないので、鳴かずに自分のツモを待ちます。';
     }

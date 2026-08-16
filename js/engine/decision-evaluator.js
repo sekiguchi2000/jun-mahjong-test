@@ -593,7 +593,10 @@ function discardCandidate({
     if (planEvaluation.retention > 0) {
       // テンパイへ入る打牌では待ち質(受け入れ実枚数)を優先し、プラン価値は0.4倍に減衰。
       // 「効率が少し落ちても高め」は許すが、生き待ち3枚→1枚のような大損は許さない。
-      const tenpaiAttenuation = afterShanten === 0 ? 0.4 : 1;
+      const tenpaiAttenuation = afterShanten === 0 ? 0.3 : 1;
+      // 3向聴以上の未発達な手では「切り順」(牌の価値序列と骨組み)が受け入れ枚数より
+      // 支配的であるべき (カルテ9号: 雑手で暗刻や赤を切った実戦バグ群)
+      const deepShantenBoost = afterShanten >= 3 ? 3 : 1;
       const valueBias = context.planContext?.valueBias ?? 1;
       planEvaluation = {
         ...planEvaluation,
@@ -602,13 +605,18 @@ function discardCandidate({
         valueBiasCode: context.planContext?.valueBiasCode ?? 'NEUTRAL',
       };
       utilityAdjustments.planRetention =
-        -(PLAN_SCALE * planEvaluation.retention * tenpaiAttenuation * valueBias);
+        -(PLAN_SCALE * deepShantenBoost * planEvaluation.retention * tenpaiAttenuation * valueBias);
     }
   }
   const utilityAdjustment = Object.values(utilityAdjustments)
     .reduce((sum, adjustment) => sum + adjustment, 0);
+  // v12.6: 向聴数が深いほど「生の受け入れ枚数」の信頼度を割り引く。
+  // 3向聴の雑手では浮き牌を抱えるほど枚数が膨らみ、完成面子を崩す誘因になるため
+  // (カルテ9号: 發の暗刻から切った実戦バグ)。同一向聴内の比較なので順序は保たれ、
+  // 差分だけが縮んでプラン・骨組み・安全の項が相対的に強くなる。
+  const shantenDamp = afterShanten <= 1 ? 1 : afterShanten === 2 ? 0.65 : afterShanten === 3 ? 0.5 : 0.35;
   const utilityScore = calculateUkeire
-    ? ukeirePhysical * context.phase.efficiencyWeight + utilityAdjustment
+    ? ukeirePhysical * context.phase.efficiencyWeight * shantenDamp + utilityAdjustment
     : null;
   let riichiEvaluation = null;
   let declareRiichi = false;
@@ -1167,15 +1175,20 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     const kind = offer.tile.kind;
     const isYakuhai = isDragon(kind) || kind === view.seatWind || kind === view.roundWind;
     const pairs = counts.filter(count => count >= 2).length;
-    const toitoiRoute = pairs >= style.ponPairMin && counts[kind] >= 2;
+    // 手中に暗刻が完成しているなら、4枚目のポンは面子を壊すだけの無意味な鳴き
+    // (カルテ10号: 白白白を持って4枚目の白をポンした実戦バグ)
+    const ankoComplete = counts[kind] >= 3;
+    const toitoiRoute = !ankoComplete && pairs >= style.ponPairMin && counts[kind] >= 2;
     const pon = {
-      candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true, allowed: true,
-      utility: isYakuhai ? 1000 : (toitoiRoute ? 900 : -100),
-      metrics: { kind, isYakuhai, pairs, requiredPairs: style.ponPairMin },
-      reasons: [isYakuhai ? 'YAKUHAI_PON' : (toitoiRoute ? 'TOITOI_ROUTE' : 'KEEP_CLOSED')],
+      candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true,
+      allowed: !ankoComplete,
+      utility: ankoComplete ? -1000 : (isYakuhai ? 1000 : (toitoiRoute ? 900 : -100)),
+      metrics: { kind, isYakuhai, pairs, requiredPairs: style.ponPairMin, ankoComplete },
+      reasons: [ankoComplete ? 'ANKO_ALREADY_COMPLETE'
+        : (isYakuhai ? 'YAKUHAI_PON' : (toitoiRoute ? 'TOITOI_ROUTE' : 'KEEP_CLOSED'))],
     };
     candidates.push(pon);
-    if (isYakuhai || toitoiRoute) selected = pon;
+    if (!ankoComplete && (isYakuhai || toitoiRoute)) selected = pon;
   }
 
   if (offer.canKan) {
