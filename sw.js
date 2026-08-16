@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v48-karte8-11';
+const CACHE = 'jun-mahjong-v49-safety-reasons';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -31,7 +31,7 @@ const ASSETS = [
   'js/engine/decision-contract.js', 'js/engine/decision-log.js',
   'js/engine/legal-actions.js', 'js/engine/decision-boundary.js',
   'js/engine/decision-evaluator.js?v=18', 'js/engine/win-uncertainty.js',
-  'js/engine/review-evaluator.js?v=18', 'js/engine/session-snapshot.js', 'js/engine/decision-coach.js?v=3',
+  'js/engine/review-evaluator.js?v=18', 'js/engine/session-snapshot.js', 'js/engine/decision-coach.js?v=4',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'assets/gptimage_v1/table_felt_v1.png',
   'assets/gptimage_v1/hanzou_portrait_v1.png',

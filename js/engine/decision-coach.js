@@ -138,6 +138,75 @@ function planKeepPhrase(planEvaluation) {
   return null;
 }
 
+// 「〜だから当たらない/当たりにくい」: 選んだ牌の安全根拠を証拠つきで言う (v12.7)
+function safetyReasonSentences(view, metrics, selectedTile) {
+  const details = metrics?.safety?.perThreatDetails;
+  if (!Array.isArray(details) || details.length === 0 || !selectedTile) return [];
+  const name = tileName(selectedTile.kind, selectedTile.red);
+  if (metrics.safety.commonGenbutsu && details.length > 1) {
+    return [`${name}は全員のリーチに対して通っている現物なので、当たりません。`];
+  }
+  const sentences = [];
+  for (const detail of details.slice(0, 2)) {
+    const label = relativeSeatLabel(view, detail.seat) ?? 'リーチ者';
+    if (detail.genbutsu) {
+      const inOwnRiver = (view?.public?.players?.[detail.seat]?.discards ?? [])
+        .some(discard => discard.tile.kind === selectedTile.kind);
+      sentences.push(inOwnRiver
+        ? `${name}は${label}の河にある現物なので、${label}には当たりません。`
+        : `${name}はリーチ宣言の後に場に通った牌なので、フリテンの規則で${label}には当たりません。`);
+      continue;
+    }
+    const routes = detail.sequenceRoutes ?? [];
+    const reasons = [];
+    const sujiRoutes = routes.filter(route => route.eliminatedBySuji);
+    const ryanmenAlive = routes.some(route => route.possible && route.shape === 'RYANMEN');
+    if (sujiRoutes.length > 0 && !ryanmenAlive) {
+      const evidence = [...new Set(sujiRoutes.map(route => tileName(route.alternateKind)))].join('・');
+      reasons.push(`${evidence}が通っているスジなので、両面待ちには当たりません`);
+    }
+    const wallKinds = [...new Set(routes
+      .filter(route => route.eliminatedByNoChance)
+      .flatMap(route => route.companions.filter((companion, i) => route.companionRemaining[i] === 0)))]
+      .map(kind => tileName(kind));
+    if (wallKinds.length > 0) {
+      reasons.push(`${wallKinds.join('・')}が4枚見えていて、それを使う待ちの形は作れません`);
+    }
+    if (routes.length === 0) {
+      const waits = detail.residualWaits ?? [];
+      const waitText = waits.includes('SHANPON') ? 'シャンポンか単騎' : '単騎';
+      reasons.push(`字牌なので順子の待ちでは当たらず、残る可能性は${waitText}だけです`);
+    } else if (reasons.length === 0 && routes.some(route => route.possible && route.oneChance)) {
+      reasons.push('周りの牌が3枚見えていて、当たる形が残りにくくなっています(ワンチャンス)');
+    }
+    if (detail.urasujiOfDeclaration) {
+      reasons.push('ただし宣言牌の裏筋にあたるので、警戒は少し残します');
+    }
+    if (reasons.length > 0) {
+      sentences.push(`${name}は、${reasons.join('。また、')}。`);
+    } else if (detail.risk > 0) {
+      sentences.push(`${name}は${label}への無筋で、通る根拠はありません。手の価値との比較で選んでいます。`);
+    }
+  }
+  return [...new Set(sentences)];
+}
+
+// テンパイ気配(リーチ未満)の相手に対する通りやすさの根拠
+function pressureSafetySentence(view, metrics, selectedTile) {
+  const caution = metrics?.pressureCaution;
+  if (!Array.isArray(caution) || caution.length === 0 || !selectedTile) return '';
+  const safeSeats = caution.filter(item => item.danger === 0)
+    .map(item => relativeSeatLabel(view, item.seat)).filter(Boolean);
+  const name = tileName(selectedTile.kind, selectedTile.red);
+  if (safeSeats.length > 0) {
+    return `${name}は${safeSeats.join('・')}に対して通った実績のある牌です。`;
+  }
+  if (isHonor(selectedTile.kind)) {
+    return `${name}は字牌なので、順子の待ちには当たりません。`;
+  }
+  return '';
+}
+
 function relativeSeatLabel(view, seat) {
   const me = Number.isInteger(view?.me) ? view.me : 0;
   const relative = ((seat - me) % 4 + 4) % 4;
@@ -390,18 +459,25 @@ function turnExplanationParts(view, analysis) {
       sentences.push('相手の捨て牌が一色に寄って見えるので、その色の牌を不用意に切らないようにします。');
     } else if (factors.has('RIICHI_COMMON_GENBUTSU')) {
       sentences.push('相手のリーチに対して完全に通っている牌があります。ここは無理をせず、現物から切って安全に進めます。');
-      const safety = safetySentence(metrics);
-      if (safety) sentences.push(safety);
     } else if (factors.has('LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_SAFE_TILE')) {
       sentences.push('相手にリーチがあるので、完全な安全牌ではなくても、公開情報から比べて危険度が低い牌を選びます。');
-      const safety = safetySentence(metrics);
-      if (safety) sentences.push(safety);
     } else {
       sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
     }
     if (factors.has('PRESSURE_CAUTION')) {
       const caution = pressureCautionSentence(view, analysis);
       if (caution) sentences.push(caution);
+    }
+    // v12.7: リーチ・気配相手がいるときは、選んだ牌の安全根拠を証拠つきで言う
+    {
+      const selectedTileForSafety = tileAt(view, action.index);
+      const safetyReasons = safetyReasonSentences(view, metrics, selectedTileForSafety);
+      if (safetyReasons.length > 0) {
+        sentences.push(...safetyReasons);
+      } else {
+        const pressureReason = pressureSafetySentence(view, metrics, selectedTileForSafety);
+        if (pressureReason) sentences.push(pressureReason);
+      }
     }
     if (Number.isInteger(metrics.shanten) && Number.isFinite(metrics.ukeirePhysical)) {
       const distance = metrics.shanten === 0
