@@ -856,6 +856,22 @@ class UI {
   }
 
   // --- 「あれ?」レポート (テスターの違和感をワンタップでカルテ用に記録) ---
+  maybeShowAreReportHint() {
+    if (this.areHintShown) return;
+    this.areHintShown = true;
+    try {
+      if (localStorage.getItem('jun-are-hint-v1')) return;
+      localStorage.setItem('jun-are-hint-v1', '1');
+    } catch { /* localStorage不可でも一度だけ表示 */ }
+    const hint = document.createElement('div');
+    hint.className = 'are-report-hint';
+    hint.textContent = 'COMや打ち手ガイドの判断に「あれ?」と思ったら、その瞬間に右上の「あれ?」ボタンを押してください。あとで中断メニューの「レポートを書き出す」からまとめて送れます。(タップで閉じる)';
+    document.body.appendChild(hint);
+    const dismiss = () => hint.remove();
+    hint.addEventListener('click', dismiss);
+    setTimeout(dismiss, 12000);
+  }
+
   recordAreReport() {
     const context = this.areReportContext;
     // ガイド表示は同じ手番のものだけ添える(古い表示の誤対応を防ぐ)
@@ -1914,6 +1930,7 @@ class UI {
     this.myHand = view.hand;
     this.myDrawn = view.drawn;
     this.areReportContext = { view, options, offer: null };
+    this.maybeShowAreReportHint();
     this.showCoachTurn(view, options);
     const self = this;
     return new Promise((resolve, reject) => {

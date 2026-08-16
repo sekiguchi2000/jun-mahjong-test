@@ -1,5 +1,9 @@
 /* are-report-v1.css — 「あれ?」ボタン(違和感レポート) */
 .are-report-button {
+  position: fixed;
+  top: 64px;
+  right: 10px;
+  z-index: 95;
   appearance: none;
   border: 1px solid rgba(214, 178, 94, 0.55);
   border-radius: 10px;
@@ -15,3 +19,19 @@
 .are-report-button:hover { background: rgba(24, 40, 58, 0.9); }
 .are-report-button:active { transform: translateY(1px); }
 .are-report-button[data-flash='1'] { border-color: #9fd48f; color: #cfe9c4; }
+
+.are-report-hint {
+  position: fixed;
+  top: 106px;
+  right: 10px;
+  z-index: 95;
+  max-width: 230px;
+  background: rgba(10, 20, 32, 0.95);
+  border: 1px solid rgba(214, 178, 94, 0.5);
+  border-radius: 10px;
+  color: #e8e2d2;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  padding: 8px 11px;
+  cursor: pointer;
+}
