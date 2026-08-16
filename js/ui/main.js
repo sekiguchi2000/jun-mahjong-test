@@ -145,7 +145,9 @@ function coachActionCaption(action) {
 }
 
 function coachCopy(text) {
-  return String(text ?? '').replace(COACH_TILE_WORDS, 'この牌');
+  // v12.7まで牌名を「この牌」へ置換していたが、意図ベースの解説(伸ばしたい形・
+  // 受け入れ・安全根拠)は複数の牌を名指しするため、名前をそのまま表示する
+  return String(text ?? '');
 }
 
 function coachProgressSentence(metrics) {
@@ -575,21 +577,28 @@ class UI {
     const alternatives = (analysis?.candidates ?? [])
       .filter(candidate => candidate.action?.action === 'discard')
       .slice(0, 14);
+    const handAll = view?.drawn ? [...(view.hand ?? []), view.drawn] : [...(view?.hand ?? [])];
+    const nameOf = action => {
+      const tile = Number.isInteger(action?.index) ? handAll[action.index] : null;
+      return tile ? tileName(tile.kind, tile.red) : 'この牌';
+    };
+    const selectedName = nameOf(selected.action);
     return alternatives.map(candidate => {
       const metrics = candidate.metrics ?? {};
       const selectedMetrics = selected.metrics ?? {};
+      const name = nameOf(candidate.action);
       let explanation;
       if (candidate === selected) {
         explanation = `提案です。${coachProgressSentence(metrics)}`;
       } else if (Number.isInteger(metrics.shanten) && Number.isInteger(selectedMetrics.shanten) &&
           metrics.shanten > selectedMetrics.shanten) {
-        explanation = `${coachProgressSentence(metrics)} 提案の牌を切るほうがテンパイに近づくため、この牌は選びません。`;
+        explanation = `${coachProgressSentence(metrics)} ${selectedName}を切るほうがテンパイに近づくため、${name}は選びません。`;
       } else if (Number.isFinite(metrics.ukeirePhysical) && Number.isFinite(selectedMetrics.ukeirePhysical) &&
           selectedMetrics.ukeirePhysical > metrics.ukeirePhysical) {
-        explanation = `${coachProgressSentence(metrics)} 提案の牌を切ると${selectedMetrics.ukeirePhysical}枚になり、${selectedMetrics.ukeirePhysical - metrics.ukeirePhysical}枚多く残ります。`;
+        explanation = `${coachProgressSentence(metrics)} ${selectedName}を切ると${selectedMetrics.ukeirePhysical}枚になり、${selectedMetrics.ukeirePhysical - metrics.ukeirePhysical}枚多く残ります。`;
       } else if (Number.isFinite(metrics.ukeirePhysical) && Number.isFinite(selectedMetrics.ukeirePhysical) &&
           selectedMetrics.ukeirePhysical < metrics.ukeirePhysical) {
-        explanation = `${coachProgressSentence(metrics)} 形の広さだけならこちらが上ですが、見えている価値や相手の捨て牌を優先して提案の牌を選びます。`;
+        explanation = `${coachProgressSentence(metrics)} 形の広さだけなら${name}が上ですが、見えている価値や相手の捨て牌を優先して${selectedName}を選びます。`;
       } else {
         explanation = `${coachProgressSentence(metrics)} この比較だけでは差が小さいため、役になりやすさや見えている危険を合わせて決めます。`;
       }
@@ -602,7 +611,7 @@ class UI {
     if (!dialog || dialog.open || !result) return false;
     const { view, offer } = this.latestCoachContext ?? {};
     $('#coach-detail-title').textContent = result.headline || '判断の理由';
-    $('#coach-detail-recommendation').textContent = coachActionCaption(result.action);
+    $('#coach-detail-recommendation').textContent = result.recommendation || coachActionCaption(result.action);
     this.renderCoachTiles($('#coach-detail-tile-visual'), result.action, view, offer);
     const body = $('#coach-detail-body');
     body.replaceChildren();
@@ -1214,7 +1223,7 @@ class UI {
     this.latestCoachResult = result;
     this.latestCoachContext = { view, offer };
     $('#coach-title').textContent = result.phase === 'claim' ? '鳴くかどうか' : '何を選ぶか';
-    $('#coach-recommendation').textContent = coachActionCaption(result.action);
+    $('#coach-recommendation').textContent = result.recommendation || coachActionCaption(result.action);
     $('#coach-explanation').textContent = coachCopy(result.headline || result.explanation);
     this.renderCoachTiles($('#coach-tile-visual'), result.action, view, offer);
     const more = $('#coach-more');
