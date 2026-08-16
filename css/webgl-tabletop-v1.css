@@ -1,0 +1,190 @@
+/* Hallmark · theme: studied-DNA (source: approved proto3_iter4) · genre: atmospheric game table · tone: physical private salon · anchor: Jun ink-blue · macrostructure: Workbench / single-camera tabletop */
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 · contrast: pass (40–41) · nav/footer/hero: n/a · slop: pass (42–57) */
+#webgl-tabletop {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: transparent;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+#webgl-tabletop[data-ready='true'] {
+  opacity: 1;
+}
+
+/*
+ * The approved WebGL scene owns the table.  Its transparent canvas must sit
+ * over a room-only plate, never the former bitmap table (which would create a
+ * second rim and a conflicting perspective beneath the real geometry).
+ */
+#board.webgl-tabletop-active {
+  background-image: url('../assets/gptimage_v8/private_room_no_table_v1.png');
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+#webgl-tabletop canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  outline: 0;
+}
+
+/*
+ * Keep the semantic/fallback DOM alive until WebGL is genuinely ready. Once
+ * active, only the approved single-camera scene may paint tabletop objects.
+ */
+#board.webgl-tabletop-active .tabletop-seat-scene,
+#board.webgl-tabletop-active #my-melds {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+#board.webgl-tabletop-active #table-wrap {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  perspective: none !important;
+  filter: none !important;
+}
+
+#board.webgl-tabletop-active #table-plane {
+  transform: none !important;
+}
+
+#board.webgl-tabletop-active #table {
+  inset: 0 !important;
+}
+
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  /*
+   * The WebGL camera projects the far river above the geometric screen
+   * centre. Move the DOM scoreboard toward the viewer so its opaque body
+   * cannot cover the far player's first row; keep its full readable size.
+   */
+  #board.webgl-tabletop-active #center {
+    transform: translateY(26px);
+  }
+
+  #board.webgl-tabletop-active .chip.seat-0 {
+    right: max(10px, env(safe-area-inset-right)) !important;
+    bottom: 16px !important;
+    left: auto !important;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  /* 667×375 shares the accepted v6 camera. The compact centre fits the real
+   * four-river opening while two compact HUD rows stay off every table tile. */
+  #board.webgl-tabletop-active #match-mark {
+    display: none;
+  }
+
+  #board.webgl-tabletop-active #center {
+    width: 100px;
+    height: 58px;
+    padding: 4px 7px;
+    gap: 1px;
+    transform: translateY(13px);
+  }
+
+  #board.webgl-tabletop-active #center .kyoku { font-size: 15px; }
+  #board.webgl-tabletop-active #center .sub { gap: 4px; font-size: 10px; }
+  #board.webgl-tabletop-active #center .dora-row { margin-top: 1px; }
+  #board.webgl-tabletop-active #center .dora-row .label { font-size: 9px; }
+  #board.webgl-tabletop-active #center .dora-row .tile { width: 15px; height: 21px; }
+
+  #board.webgl-tabletop-active .chip.seat-2 {
+    top: 6px;
+    right: 94px;
+  }
+
+  #board.webgl-tabletop-active .chip.seat-0 {
+    right: auto;
+    top: 6px;
+    bottom: auto;
+    left: 8px;
+  }
+
+  #board.webgl-tabletop-active .no-claims-control {
+    top: 6px;
+    right: auto;
+    bottom: auto;
+    left: 198px;
+  }
+
+  #board.webgl-tabletop-active .chip.seat-3,
+  #board.webgl-tabletop-active .chip.seat-1 {
+    top: 62px;
+  }
+
+  /* Keep TURN inside its own plate. The desktop badge floats above the plate,
+   * which clips the top row and touches the second row at 375px high. */
+  #board.webgl-tabletop-active .chip.active::after {
+    top: 2px;
+    right: 4px;
+    bottom: auto;
+    left: auto;
+    padding: 1px 3px;
+    border-radius: 3px;
+    font-size: 8px;
+    line-height: 1;
+    letter-spacing: .45px;
+  }
+
+  /* Tenpai waits occupy the centre of row two, between the two side plates.
+   * Horizontal scrolling keeps long lists readable inside the 42px lane. */
+  #board.webgl-tabletop-active #wait-hint {
+    top: 62px;
+    bottom: auto;
+    left: calc(50% - 75px);
+    width: 150px;
+    max-width: 150px;
+    max-height: 42px;
+    padding: 5px 6px;
+    overflow-y: hidden;
+  }
+}
+
+@media (orientation: portrait) {
+  /* In portrait the physical table occupies the middle band. The readable
+   * DOM centre device becomes a HUD immediately above it; keeping it over the
+   * felt would necessarily cover one of the four rivers at 390px wide. */
+  #board.webgl-tabletop-active #center {
+    position: absolute;
+    grid-area: auto;
+    align-self: auto;
+    justify-self: auto;
+    inset: auto;
+    left: 50%;
+    top: 237px;
+    width: 106px;
+    height: 58px;
+    padding: 4px 7px;
+    gap: 1px;
+    transform: translateX(-50%);
+  }
+
+  #board.webgl-tabletop-active #center .kyoku { font-size: 15px; }
+  #board.webgl-tabletop-active #center .sub { gap: 4px; font-size: 10px; }
+  #board.webgl-tabletop-active #center .dora-row { margin-top: 1px; }
+  #board.webgl-tabletop-active #center .dora-row .label { font-size: 9px; }
+  #board.webgl-tabletop-active #center .dora-row .tile { width: 15px; height: 21px; }
+
+  #board.webgl-tabletop-active .chip.seat-2 {
+    top: 64px;
+  }
+
+  #board.webgl-tabletop-active .chip.seat-0 {
+    bottom: 18%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #webgl-tabletop { transition: none; }
+}

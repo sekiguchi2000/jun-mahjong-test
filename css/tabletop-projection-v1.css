@@ -1,0 +1,468 @@
+/* Hallmark · macrostructure: four physical seat scenes sharing one table camera
+ * tone: private-room mahjong · studied DNA: one camera, solid tiles, restrained human placement
+ * Each scene owns its rack, river and melds.  Placement, mesh and face are separate layers.
+ */
+
+:root {
+  --tabletop-river-w: clamp(25px, 2.38vw, 31px);
+  --tabletop-river-h: calc(var(--tabletop-river-w) * 1.34);
+  --tabletop-river-extended-w: clamp(22px, 2.08vw, 27px);
+  --tabletop-river-gap-x: clamp(2px, .22vw, 3px);
+  --tabletop-river-gap-y: clamp(4px, .36vw, 5px);
+  --tabletop-tile-depth: clamp(4px, .42vw, 6px);
+  --tabletop-edge-dark: oklch(37% .065 61);
+  --tabletop-edge-mid: oklch(70% .075 77);
+  --tabletop-ivory: oklch(94% .035 89);
+  --tabletop-shadow: oklch(4% .018 252 / .68);
+  --tabletop-rack-gap: clamp(10px, .92vw, 14px);
+  --tabletop-scene-scale-side: .9;
+  --tabletop-scene-scale-top: .92;
+}
+
+/*
+ * A scene is a player-local coordinate system whose origin is the middle of that
+ * player's table edge. Local +x is that player's right; local -y points inward.
+ * This is the only orientation transform used by racks, rivers and called sets.
+ */
+.tabletop-seat-scene {
+  position: absolute;
+  z-index: 7;
+  width: 0;
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+  transform-style: preserve-3d;
+  transform-origin: 0 0;
+  --seat-basis-angle: 0deg;
+  --seat-view-correction: 0deg;
+  --seat-scene-scale: 1;
+  transform:
+    rotate(calc(var(--seat-basis-angle) + var(--seat-view-correction)))
+    scale(var(--seat-scene-scale));
+}
+
+.seat-scene-0 {
+  left: 50%;
+  bottom: 1.5%;
+  --seat-basis-angle: 0deg;
+}
+
+.seat-scene-1 {
+  right: 2.4%;
+  top: 55%;
+  --seat-basis-angle: -90deg;
+  --seat-view-correction: -27deg;
+  --seat-scene-scale: var(--tabletop-scene-scale-side);
+}
+
+.seat-scene-2 {
+  left: 50%;
+  top: 1.2%;
+  --seat-basis-angle: 180deg;
+  --seat-scene-scale: var(--tabletop-scene-scale-top);
+}
+
+.seat-scene-3 {
+  left: 2.4%;
+  top: 55%;
+  --seat-basis-angle: 90deg;
+  --seat-view-correction: 27deg;
+  --seat-scene-scale: var(--tabletop-scene-scale-side);
+}
+
+/* Existing per-zone transforms are deliberately neutralised inside a seat scene. */
+.tabletop-seat-scene .seat-rack {
+  position: absolute !important;
+  inset: auto !important;
+  left: 0 !important;
+  top: -10px !important;
+  z-index: 14;
+  width: max-content;
+  height: max-content;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--tabletop-rack-gap);
+  transform: translateX(-50%) !important;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+}
+
+/* DOM order differs by seat; visual order always puts melds at local +x. */
+.seat-scene-1 .seat-rack,
+.seat-scene-2 .seat-rack { flex-direction: row-reverse !important; }
+.seat-scene-3 .seat-rack { flex-direction: row !important; }
+
+.tabletop-seat-scene .seat-rack > .concealed-rack {
+  position: relative !important;
+  inset: auto !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-end !important;
+  gap: 0 !important;
+  overflow: visible;
+  /* #table-wrap owns the sole table camera; a rack-local camera shears tiles. */
+  perspective: none !important;
+  perspective-origin: initial !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+/* A genuine six-face cuboid. No face is flattened into a clip-path sticker. */
+.tabletop-seat-scene .cuboid-tile,
+.tabletop-seat-scene .seat-rack-1 .cuboid-tile,
+.tabletop-seat-scene .seat-rack-2 .cuboid-tile,
+.tabletop-seat-scene .seat-rack-3 .cuboid-tile {
+  --cuboid-tile-width: clamp(23px, 2.12vw, 29px);
+  --cuboid-tile-height: clamp(34px, 3.08vw, 41px);
+  --cuboid-depth: clamp(11px, 1.02vw, 14px);
+  width: var(--cuboid-tile-width) !important;
+  height: var(--cuboid-tile-height) !important;
+  margin: 0 -1px 0 0 !important;
+  transform: rotateX(-9deg) scale(var(--cuboid-scale, 1)) !important;
+  transform-origin: 50% 100%;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 7px 5px var(--cuboid-shadow));
+}
+
+.tabletop-seat-scene .cuboid-face {
+  display: block !important;
+  clip-path: none !important;
+}
+
+.tabletop-seat-scene .cuboid-face-back {
+  background:
+    linear-gradient(110deg, oklch(92% .09 81 / .58), transparent 24%),
+    linear-gradient(155deg, oklch(82% .14 76), oklch(67% .17 63) 60%, oklch(40% .12 51));
+  box-shadow:
+    inset 0 0 0 3px oklch(67% .17 63),
+    inset 0 0 0 4px var(--cuboid-line),
+    inset 0 1px 0 oklch(99% .014 92 / .64);
+}
+
+/* The broad ivory crown makes the rack read as an upright wall, not orange cards. */
+.tabletop-seat-scene .cuboid-face-top {
+  display: block !important;
+  top: calc(-.86 * var(--cuboid-depth)) !important;
+  bottom: auto !important;
+  left: 2px !important;
+  width: calc(100% - 4px) !important;
+  height: calc(var(--cuboid-depth) * .9) !important;
+  transform: none !important;
+  clip-path: polygon(0 0, 100% 0, 91% 100%, 9% 100%) !important;
+  background: linear-gradient(180deg, var(--cuboid-ivory-mid), var(--cuboid-ivory-light)) !important;
+  box-shadow: inset 0 1px 0 var(--cuboid-highlight), 0 3px 0 var(--cuboid-ivory-dark);
+}
+
+/* River and rack use the same local x/y axes. River supports four rows of six. */
+.tabletop-seat-scene .river-cell {
+  position: absolute !important;
+  inset: auto !important;
+  left: 0 !important;
+  top: clamp(-162px, -14.2vw, -128px) !important;
+  width: 0;
+  height: 0;
+  z-index: 8;
+  transform: none !important;
+  transform-style: preserve-3d;
+}
+
+.seat-scene-0 .river-cell { top: clamp(-168px, -14.7vw, -134px) !important; }
+
+/* The uncommon fourth row compacts around the same origin instead of crossing the center. */
+.tabletop-seat-scene .river-cell:has(.tabletop-placement-river[data-table-row='3']) {
+  --tabletop-river-w: var(--tabletop-river-extended-w);
+}
+.seat-scene-1 .river-cell:has(.tabletop-placement-river[data-table-row='3']),
+.seat-scene-3 .river-cell:has(.tabletop-placement-river[data-table-row='3']) {
+  top: -240px !important;
+}
+.seat-scene-2 .river-cell:has(.tabletop-placement-river[data-table-row='3']) {
+  top: -190px !important;
+}
+.seat-scene-0 .river-cell:has(.tabletop-placement-river[data-table-row='3']) {
+  top: -176px !important;
+}
+
+.tabletop-seat-scene .river {
+  position: absolute !important;
+  inset: auto !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: max-content;
+  min-height: calc(var(--tabletop-river-h) * 4 + var(--tabletop-river-gap-y) * 3);
+  padding: 0;
+  display: grid !important;
+  /* Only the column containing a horizontal discard grows to its long edge. */
+  grid-template-columns: repeat(6, max-content);
+  grid-auto-rows: var(--tabletop-river-h);
+  grid-auto-flow: row;
+  column-gap: var(--tabletop-river-gap-x);
+  row-gap: var(--tabletop-river-gap-y);
+  align-content: start;
+  transform: translateX(-50%) !important;
+  transform-style: preserve-3d;
+}
+
+/* Layer 1: stable placement. It alone owns human jitter. */
+.tabletop-placement {
+  position: relative;
+  --table-slot-tile-w: var(--tabletop-river-w);
+  --table-slot-tile-h: var(--tabletop-river-h);
+  width: var(--tabletop-river-w);
+  height: var(--tabletop-river-h);
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+  transform:
+    translate3d(var(--table-jitter-x, 0), var(--table-jitter-y, 0), 0)
+    rotate(var(--table-jitter-angle, 0));
+  transform-origin: 50% 64%;
+  transform-style: preserve-3d;
+  grid-column: calc(var(--table-grid-column, 0) + 1);
+  grid-row: calc(var(--table-grid-row, 0) + 1);
+}
+
+.tabletop-placement-river {
+  width: var(--tabletop-river-w);
+  height: var(--tabletop-river-h);
+}
+
+.tabletop-placement-river[data-table-sideways='true'] {
+  width: var(--tabletop-river-h);
+}
+
+/* Layer 2: physical tile mesh. Sideways state never overwrites placement. */
+.tabletop-tile-mesh {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: var(--table-slot-tile-w, 100%);
+  height: var(--table-slot-tile-h, 100%);
+  transform: translate3d(-50%, 0, var(--tabletop-tile-depth));
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+}
+
+.tabletop-tile-mesh.is-sideways {
+  z-index: 4;
+  transform:
+    translate3d(
+      -50%,
+      calc((var(--table-slot-tile-h) - var(--table-slot-tile-w)) / 2),
+      var(--tabletop-tile-depth)
+    )
+    rotate(90deg);
+}
+
+/* Layer 3: two explicit body planes behind the exact SVG face. */
+.tabletop-tile-mesh::before,
+.tabletop-tile-mesh::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border: 1px solid var(--tabletop-edge-dark);
+  background: linear-gradient(145deg, var(--tabletop-ivory), var(--tabletop-edge-mid));
+}
+
+.tabletop-tile-mesh::before {
+  top: 3px;
+  right: calc(-1 * var(--tabletop-tile-depth));
+  width: var(--tabletop-tile-depth);
+  height: calc(100% - 1px);
+  clip-path: polygon(0 0, 100% 10%, 100% 100%, 0 92%);
+  filter: brightness(.82);
+}
+
+.tabletop-tile-mesh::after {
+  left: 3px;
+  bottom: calc(-1 * var(--tabletop-tile-depth));
+  width: calc(100% - 1px);
+  height: var(--tabletop-tile-depth);
+  clip-path: polygon(0 0, 92% 0, 100% 100%, 8% 100%);
+  filter: brightness(.72);
+  box-shadow: 4px 5px 7px var(--tabletop-shadow);
+}
+
+.tabletop-tile-mesh > .tile {
+  position: relative;
+  z-index: 2;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  filter: none;
+}
+
+.tabletop-tile-mesh.is-sideways > .tile { transform: none !important; }
+
+.tile.kakan-base {
+  overflow: visible !important;
+  transform-style: preserve-3d !important;
+}
+.tile.kakan-base > .tile.kakan-added {
+  position: absolute !important;
+  z-index: 8;
+  left: calc(50% - var(--rack-open-w) - 2px) !important;
+  top: 50% !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  transform: translate3d(-50%, -50%, 0) !important;
+  transform-origin: 50% 50% !important;
+  transform-style: preserve-3d !important;
+  filter: drop-shadow(0 3px 3px var(--tabletop-shadow));
+}
+
+.tabletop-placement.is-last-discard { z-index: 12; }
+.tabletop-placement.is-last-discard .tile {
+  outline: 2px solid #ffdc72;
+  outline-offset: 1px;
+  animation: lastDiscardGlow 1.35s ease-in-out infinite alternate;
+}
+
+.tabletop-placement.is-tsumogiri .tile { filter: brightness(.86) saturate(.86); }
+
+/* Called sets are clean, deliberate placements at local +x, not river jitter. */
+.tabletop-seat-scene .seat-melds,
+#rack-0 > #my-melds {
+  position: relative !important;
+  inset: auto !important;
+  display: flex;
+  flex-direction: row-reverse !important;
+  align-items: flex-end;
+  gap: var(--tabletop-rack-gap);
+  transform: none !important;
+}
+
+.tabletop-seat-scene .seat-melds.is-empty { display: none !important; }
+.tabletop-seat-scene .tabletop-meld-slot {
+  position: relative;
+  width: max-content !important;
+  height: var(--rack-open-h) !important;
+  flex: 0 0 auto;
+  order: var(--table-meld-order, 0);
+  transform: none !important;
+}
+
+.tabletop-seat-scene .tabletop-meld-slot > .meld {
+  position: relative !important;
+  inset: auto !important;
+  display: flex;
+  flex-direction: row !important;
+  transform: none !important;
+}
+
+.tabletop-seat-scene .seat-melds .tabletop-placement {
+  --table-slot-tile-w: var(--rack-open-w);
+  --table-slot-tile-h: var(--rack-open-h);
+  width: var(--rack-open-w);
+  height: var(--rack-open-h);
+  flex: 0 0 auto;
+  transform: none;
+}
+
+.tabletop-seat-scene .seat-melds .tabletop-placement[data-table-sideways='true'] {
+  width: var(--rack-open-h);
+}
+
+.tabletop-seat-scene .seat-melds .tile {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+#rack-0 > #my-melds { flex-direction: row-reverse !important; }
+
+/*
+ * The player's open sets use the same placement/mesh/face stack as the three
+ * opponents.  Their footprint is intentionally tied to the hand-tile token,
+ * not the smaller river token inherited by a generic tabletop placement.
+ */
+#rack-0 > #my-melds .tabletop-meld-slot {
+  position: relative;
+  width: max-content !important;
+  height: calc(var(--hand-tile-w) * 1.36) !important;
+  flex: 0 0 auto;
+}
+
+#rack-0 > #my-melds .tabletop-meld-slot > .meld {
+  position: relative !important;
+  inset: auto !important;
+  display: flex;
+  flex-direction: row !important;
+  align-items: flex-end;
+  transform: none !important;
+}
+
+#rack-0 > #my-melds .tabletop-placement {
+  --table-slot-tile-w: var(--hand-tile-w);
+  --table-slot-tile-h: calc(var(--hand-tile-w) * 1.36);
+  width: var(--hand-tile-w);
+  height: calc(var(--hand-tile-w) * 1.36);
+  flex: 0 0 auto;
+  transform: none;
+}
+
+
+#rack-0 > #my-melds .tabletop-placement[data-table-sideways='true'] {
+  width: calc(var(--hand-tile-w) * 1.36);
+}
+
+#rack-0 > #my-melds .tabletop-tile-mesh > .tile {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --tabletop-river-w: clamp(21px, 2.3vw, 25px);
+    --tabletop-river-extended-w: clamp(18px, 2vw, 22px);
+    --tabletop-river-gap-y: 3px;
+    --tabletop-scene-scale-side: .82;
+    --tabletop-scene-scale-top: .84;
+  }
+  /* Keep the complete rack and its outermost called set inside 16:9 phones. */
+  .seat-scene-1 { right: 7.6%; }
+  .seat-scene-3 { left: 7.6%; }
+  .tabletop-seat-scene .river-cell { top: -116px !important; }
+  /* The centre device must remain readable even with an 18-tile bottom river. */
+  .seat-scene-0 .river-cell { top: -88px !important; }
+  .seat-scene-1 .river-cell:has(.tabletop-placement-river[data-table-row='3']),
+  .seat-scene-3 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -175px !important; }
+  .seat-scene-2 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -132px !important; }
+  .seat-scene-0 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -85px !important; }
+  .tabletop-seat-scene .seat-rack { top: -4px !important; }
+}
+
+@media (orientation: portrait) {
+  :root {
+    --tabletop-river-w: clamp(16px, 4.45vw, 20px);
+    --tabletop-river-extended-w: clamp(14px, 3.8vw, 17px);
+    --tabletop-river-gap-x: 2px;
+    --tabletop-river-gap-y: 3px;
+    --tabletop-scene-scale-side: .72;
+    --tabletop-scene-scale-top: .78;
+  }
+  .seat-scene-1 { right: 1.8%; top: 53%; --seat-view-correction: -6deg; }
+  .seat-scene-3 { left: 1.8%; top: 53%; --seat-view-correction: 6deg; }
+  .tabletop-seat-scene .river-cell { top: -112px !important; }
+  .seat-scene-0 .river-cell { top: -120px !important; }
+  .seat-scene-1 .river-cell:has(.tabletop-placement-river[data-table-row='3']),
+  .seat-scene-3 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -165px !important; }
+  .seat-scene-2 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -138px !important; }
+  .seat-scene-0 .river-cell:has(.tabletop-placement-river[data-table-row='3']) { top: -126px !important; }
+  .tabletop-seat-scene .cuboid-tile,
+  .tabletop-seat-scene .seat-rack-1 .cuboid-tile,
+  .tabletop-seat-scene .seat-rack-2 .cuboid-tile,
+  .tabletop-seat-scene .seat-rack-3 .cuboid-tile {
+    --cuboid-tile-width: clamp(18px, 5vw, 22px);
+    --cuboid-tile-height: clamp(26px, 7vw, 31px);
+    --cuboid-depth: clamp(9px, 2.7vw, 12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabletop-placement,
+  .tabletop-tile-mesh,
+  .tabletop-seat-scene .cuboid-tile,
+  .tabletop-seat-scene .cuboid-face { transition: none !important; animation: none !important; }
+}

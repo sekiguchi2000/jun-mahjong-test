@@ -1,0 +1,117 @@
+/* Hallmark · component: riichi stake declaration · genre: premium table prop · theme: existing Jun table
+ * states: hidden · placing · settled · reduced motion
+ * contrast: ivory/red stake over dark blue felt · responsive: 320–1920px
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+
+/* Meshyで検品した無地の棒形状を元にした軽量スプライト。数値はDOMで正確に重ねる。 */
+#riichi-stick-cinematic {
+  --riichi-from-x: 0vw;
+  --riichi-from-y: 44vh;
+  --riichi-tilt: 0deg;
+  position: absolute;
+  inset: 0;
+  z-index: 57;
+  pointer-events: none;
+  overflow: hidden;
+  perspective: 1000px;
+}
+
+#riichi-stick-cinematic[data-player='0'] { --riichi-from-y: 48vh; --riichi-tilt: -17deg; }
+#riichi-stick-cinematic[data-player='1'] { --riichi-from-x: 48vw; --riichi-from-y: 5vh; --riichi-tilt: 22deg; }
+#riichi-stick-cinematic[data-player='2'] { --riichi-from-y: -46vh; --riichi-tilt: 9deg; }
+#riichi-stick-cinematic[data-player='3'] { --riichi-from-x: -48vw; --riichi-from-y: 5vh; --riichi-tilt: -22deg; }
+
+.riichi-stick-prop {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(230px, 29vw, 430px);
+  aspect-ratio: 1;
+  opacity: 0;
+  background: url('../assets/gptimage_v6/riichi_stick_sprite_v1.png') center / contain no-repeat;
+  filter: drop-shadow(0 18px 11px rgba(0, 0, 0, .52));
+  transform: translate(-50%, -50%) rotateX(62deg) scale(.76);
+  transform-style: preserve-3d;
+}
+
+.riichi-stick-value {
+  position: absolute;
+  left: 50%;
+  top: 49%;
+  color: #47100d;
+  font: 800 clamp(18px, 2.2vw, 32px) / 1 Georgia, serif;
+  letter-spacing: .14em;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .85), 0 2px 2px rgba(73, 14, 10, .22);
+  transform: translate(-50%, -50%) rotate(-29deg);
+}
+
+.riichi-stick-impact {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(94px, 13vw, 190px);
+  aspect-ratio: 1;
+  opacity: 0;
+  border: 2px solid rgba(255, 207, 89, .78);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(255, 191, 56, .72), inset 0 0 18px rgba(255, 213, 105, .25);
+  transform: translate(-50%, -50%) scale(.32);
+}
+
+#riichi-stick-cinematic.is-playing .riichi-stick-prop {
+  animation: riichi-stick-place 860ms cubic-bezier(.18, .9, .2, 1) both;
+}
+
+#riichi-stick-cinematic.is-playing .riichi-stick-impact {
+  animation: riichi-stick-impact 560ms 540ms cubic-bezier(.12, .76, .24, 1) both;
+}
+
+@keyframes riichi-stick-place {
+  0% { opacity: 0; transform: translate(calc(-50% + var(--riichi-from-x)), calc(-50% + var(--riichi-from-y))) rotateX(76deg) rotateZ(var(--riichi-tilt)) scale(.7); }
+  14% { opacity: 1; }
+  69% { opacity: 1; transform: translate(-50%, -50%) rotateX(57deg) rotateZ(0) scale(1.05); }
+  84% { opacity: 1; transform: translate(-50%, -50%) rotateX(57deg) rotateZ(0) scale(.96); }
+  100% { opacity: 1; transform: translate(-50%, -50%) rotateX(57deg) rotateZ(0) scale(1); }
+}
+
+@keyframes riichi-stick-impact {
+  0% { opacity: .95; transform: translate(-50%, -50%) scale(.32); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.72); }
+}
+
+/* 席札の供託表示も、単なる線でなく赤端と刻印を持つ棒として読める。 */
+.chip .riichi-stick {
+  width: 44px;
+  height: 7px;
+  border: 1px solid rgba(82, 35, 15, .7);
+  border-radius: 5px;
+  background: linear-gradient(90deg, #a92018 0 12%, #f8f1d5 13% 87%, #a92018 88% 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .45), inset 0 1px rgba(255, 255, 255, .72);
+}
+
+.chip .riichi-stick::before {
+  content: '1000';
+  display: block;
+  color: #52120f;
+  font: 800 5px / 6px Georgia, serif;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+.chip .riichi-stick::after { display: none; }
+
+@media (max-width: 700px) {
+  .riichi-stick-prop { width: clamp(205px, 67vw, 310px); }
+  .riichi-stick-value { font-size: clamp(16px, 5.2vw, 24px); }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .riichi-stick-prop { width: clamp(190px, 28vw, 310px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #riichi-stick-cinematic.is-playing .riichi-stick-prop,
+  #riichi-stick-cinematic.is-playing .riichi-stick-impact { animation: none; }
+  #riichi-stick-cinematic.is-playing .riichi-stick-prop { opacity: 1; transform: translate(-50%, -50%) rotateX(57deg); }
+}

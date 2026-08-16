@@ -1,0 +1,230 @@
+/* Hallmark · physical table pass v2
+ * Non-negotiable UX: the next/back action is never inside a scrolling region.
+ * Table grammar: walls are upright, rivers are equally readable, and called sets live by each hand.
+ */
+
+:root {
+  --physical-river-tile: clamp(21px, 2.55vw, 30px);
+  --physical-chip-copy: clamp(14px, 1.15vw, 17px);
+}
+
+/* ---------- upright walls: no player is allowed to look as if they laid their tiles flat ---------- */
+.back-strip.vertical .btile {
+  width: clamp(20px, 2.45vw, 27px);
+  height: clamp(27px, 3.35vw, 35px);
+  border-radius: 4px 4px 3px 3px;
+  transform: translateZ(8px);
+  box-shadow:
+    inset 0 1px 0 var(--tile3d-gloss),
+    inset 0 -1px 0 var(--tile3d-wood-line),
+    0 4px 0 var(--tile3d-wood-low),
+    0 8px 9px var(--tile3d-shadow);
+}
+
+.back-strip.vertical .btile::after { inset: 4px 3px; }
+#strip-left .btile:nth-child(2n),
+#strip-right .btile:nth-child(2n) { transform: translateZ(5px); }
+
+/* The far wall is equally a standing row, with a visible upper edge and a real shadow. */
+#strip-top .btile {
+  min-height: clamp(30px, 3.65vw, 38px);
+  transform: translateZ(6px) rotateX(-3deg);
+}
+
+/* ---------- each river uses the same readable tile scale ---------- */
+.river-cell { --river-tile-w: var(--physical-river-tile); z-index: 5; }
+.river-cell.top { --river-tile-w: var(--physical-river-tile); }
+.river { gap: clamp(2px, .24vw, 3px); }
+.river .tile { --tile-depth: 3px; }
+.river .tile.riichi-followup {
+  z-index: 3;
+  margin-inline: calc(var(--river-tile-w) * .17);
+  transform: rotate(90deg) translateY(-1px);
+  filter: brightness(1.08) drop-shadow(0 2px 3px rgba(0, 0, 0, .42));
+}
+
+/* Called riichi declaration: the next discard is physically sideways, not merely marked with a colour. */
+.river .tile.riichi-followup::before { box-shadow: inset 0 0 0 1px rgba(255, 215, 111, .72); }
+
+/* ---------- called tiles belong to their owner’s rack, never to a chip or river ---------- */
+.chip .melds { display: none !important; }
+.seat-melds {
+  position: absolute;
+  z-index: 14;
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, .55vw, 8px);
+  min-width: 1px;
+  min-height: 1px;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+.seat-melds.is-empty { display: none; }
+.seat-melds .meld { display: flex; align-items: center; gap: 1px; }
+.seat-melds .tile { --tile-depth: 3px; width: clamp(18px, 2.25vw, 26px); height: clamp(25px, 3.05vw, 34px); }
+.seat-melds .tile.sideways,
+#my-melds .tile.sideways {
+  z-index: 2;
+  margin-inline: clamp(5px, .6vw, 8px);
+  transform: rotate(90deg) translateY(1px);
+}
+
+/* Directional rack placement lives in table-geometry-v3.css. */
+#my-melds .tile { --tile-depth: 4px; }
+
+/* ---------- plates remain legible without eating the rivers ---------- */
+.chip {
+  z-index: 31;
+  min-width: clamp(132px, 15.3vw, 180px);
+  min-height: clamp(58px, 6.3vw, 72px);
+  gap: clamp(7px, .65vw, 10px);
+  padding: 7px 10px 7px 7px;
+}
+.chip .avatar { width: clamp(38px, 4.2vw, 48px); height: clamp(38px, 4.2vw, 48px); }
+.chip .who { font-size: var(--physical-chip-copy); line-height: 1.12; }
+.chip .who small { max-width: 112px; font-size: clamp(10px, .8vw, 12px); line-height: 1.18; }
+.chip .pts { font-size: clamp(17px, 1.48vw, 21px); font-variant-numeric: tabular-nums; }
+.chip .riichi-state {
+  position: absolute;
+  right: 9px;
+  bottom: 5px;
+  color: #ffd970;
+  font: 800 11px/1 var(--v16-font-body);
+  letter-spacing: .09em;
+  text-shadow: 0 1px 2px #000;
+}
+.chip.seat-2 { top: 3.5%; right: 10%; }
+.chip.seat-3 { top: 15%; left: max(8px, env(safe-area-inset-left)); }
+.chip.seat-1 { top: 15%; right: max(8px, env(safe-area-inset-right)); }
+.chip.seat-0 { left: max(10px, env(safe-area-inset-left)); bottom: 20%; }
+
+/* ---------- central riichi pot: a declaration ends in the table, not under a player plate ---------- */
+#center { overflow: visible; }
+.riichi-pot {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-height: 10px;
+  padding: 3px 7px;
+  border: 1px solid rgba(230, 190, 100, .34);
+  border-radius: 999px;
+  background: rgba(2, 9, 16, .72);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, .4);
+  transform: translateX(-50%) rotateX(55deg);
+}
+.riichi-pot-stick {
+  display: grid;
+  place-items: center;
+  width: clamp(28px, 3vw, 38px);
+  height: clamp(5px, .55vw, 7px);
+  margin-left: -4px;
+  border: 1px solid rgba(82, 35, 15, .8);
+  border-radius: 999px;
+  color: #53120e;
+  background: linear-gradient(90deg, #a92018 0 12%, #f8f1d5 13% 87%, #a92018 88% 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .42), inset 0 1px rgba(255, 255, 255, .7);
+  font: 800 clamp(4px, .4vw, 5px)/1 Georgia, serif;
+  letter-spacing: .02em;
+}
+.riichi-pot-stick:first-child { margin-left: 0; }
+.riichi-pot[data-count='1']::after { content: ''; }
+
+/* ---------- coach: a tile illustration leads every recommendation ---------- */
+.coach-advice { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
+.coach-tile-visual { display: flex; align-items: center; justify-content: center; gap: 3px; min-width: 0; }
+.coach-tile-visual.is-empty { display: none; }
+#coach-tile-visual .tile { --tile-depth: 4px; width: clamp(33px, 3vw, 42px); height: clamp(45px, 4.1vw, 56px); }
+.coach-copy { min-width: 0; }
+#coach-recommendation { font-size: clamp(18px, 1.6vw, 22px); }
+#coach-explanation { font-size: clamp(15px, 1.2vw, 18px); }
+#coach-panel[data-collapsed='true'] .coach-tile-visual { display: none; }
+
+.coach-detail-choice { display: flex; align-items: center; justify-content: flex-end; gap: 10px; max-width: 52%; }
+.coach-detail-choice .coach-tile-visual .tile { --tile-depth: 4px; width: 31px; height: 42px; }
+.coach-detail-choice strong { color: var(--v16-text); font-size: clamp(16px, 2.4vw, 20px); line-height: 1.35; text-align: right; }
+.coach-comparison-row {
+  display: grid;
+  grid-template-columns: minmax(46px, 66px) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(220, 250, 255, .11);
+}
+.coach-comparison-row.selected { border-left: 3px solid var(--v16-gold); padding-left: 10px; background: linear-gradient(90deg, rgba(239, 188, 76, .11), transparent); }
+.coach-comparison-tile .tile { --tile-depth: 3px; width: 28px; height: 38px; }
+.coach-comparison-row p,
+#coach-detail-body p.coach-supplement { margin: 0; font-size: 16px; line-height: 1.68; }
+#coach-detail-body p.coach-supplement { margin-top: 16px; }
+
+/* ---------- result: details may scroll, but progress is a permanent screen edge ---------- */
+#overlay-content {
+  width: min(94vw, 760px);
+  height: min(760px, calc(100dvh - 20px));
+  max-height: none;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: 0;
+  overflow: hidden;
+}
+.overlay-scroll {
+  min-height: 0;
+  padding: clamp(18px, 2.4vw, 30px) clamp(18px, 2.5vw, 32px) 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--learn-rule-strong) var(--v16-panel-strong);
+  scrollbar-width: thin;
+}
+.overlay-progress-actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  min-height: 72px;
+  padding: 12px clamp(18px, 2.5vw, 32px) max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(235, 204, 128, .34);
+  background: linear-gradient(180deg, rgba(7, 20, 33, .88), rgba(3, 8, 14, .98));
+  box-shadow: 0 -12px 24px rgba(0, 0, 0, .24);
+}
+.overlay-progress-actions .btn { min-width: min(100%, 260px); min-height: 52px; font-size: 18px; }
+
+@media (max-width: 700px) {
+  :root { --physical-river-tile: clamp(16px, 4.55vw, 21px); }
+  .chip { min-width: 122px; min-height: 54px; padding: 6px 8px 6px 6px; }
+  .chip .avatar { width: 35px; height: 35px; }
+  .chip .who { font-size: 14px; }
+  .chip .who small { display: none; }
+  .chip .pts { font-size: 17px; }
+  .seat-melds .tile { width: clamp(15px, 4.3vw, 20px); height: clamp(21px, 5.8vw, 27px); }
+  #coach-tile-visual .tile { width: 31px; height: 42px; }
+  .coach-advice { gap: 9px; }
+  .coach-detail-choice { max-width: none; justify-content: flex-start; }
+  .coach-detail-header { align-items: flex-start; }
+  .overlay-progress-actions { justify-content: stretch; padding-inline: 16px; }
+  .overlay-progress-actions .btn { width: 100%; }
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  .back-strip.vertical .btile { width: clamp(17px, 2.6vw, 22px); height: clamp(23px, 3.15vw, 28px); }
+  .chip { min-width: 124px; min-height: 52px; }
+  .chip .who { font-size: 14px; }
+  .chip .pts { font-size: 16px; }
+  #overlay-content { height: calc(100dvh - 12px); }
+  .overlay-progress-actions { min-height: 60px; padding-block: 7px; }
+}
+
+@media (orientation: portrait) {
+  .back-strip.vertical .btile { width: clamp(17px, 5vw, 22px); height: clamp(23px, 6.6vw, 29px); }
+  .chip.seat-2 { top: 5%; right: 3%; }
+  .chip.seat-3 { top: 21%; left: 4px; }
+  .chip.seat-1 { top: 21%; right: 4px; }
+  .chip.seat-0 { bottom: 18%; left: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .river .tile.riichi-followup { filter: none; }
+}

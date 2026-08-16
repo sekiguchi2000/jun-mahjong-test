@@ -1,0 +1,166 @@
+/* Hallmark · component: projected concealed mahjong cuboid · macrostructure: six-face physical rack
+ * genre: atmospheric · tone: premium physical table · palette: Jun ivory / warm amber
+ * states: top-seat · right-seat · left-seat · compact · portrait · reduced-motion
+ * contrast: decorative geometry only · responsive: 320–1920px
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+
+:root {
+  --cuboid-width: clamp(23px, 2.15vw, 29px);
+  --cuboid-height: clamp(33px, 3vw, 40px);
+  --cuboid-depth: clamp(15px, 1.35vw, 19px);
+  --cuboid-gap: clamp(1px, .13vw, 2px);
+  --cuboid-back-light: oklch(82% .14 76);
+  --cuboid-back-mid: oklch(67% .17 63);
+  --cuboid-back-dark: oklch(40% .12 51);
+  --cuboid-ivory-light: oklch(96% .035 91);
+  --cuboid-ivory-mid: oklch(82% .055 82);
+  --cuboid-ivory-dark: oklch(58% .065 69);
+  --cuboid-line: oklch(29% .065 48 / .92);
+  --cuboid-shadow: oklch(4% .016 252 / .74);
+  --cuboid-highlight: oklch(99% .014 92 / .64);
+}
+
+/* The rack supplies one shared camera; every child remains an independent 3D object. */
+.seat-rack > .concealed-rack {
+  perspective: 720px;
+  perspective-origin: 50% 42%;
+  transform-style: preserve-3d;
+}
+
+.seat-rack-1 > .concealed-rack,
+.seat-rack-3 > .concealed-rack {
+  gap: var(--cuboid-gap);
+}
+
+.seat-rack .cuboid-tile {
+  --cuboid-scale: calc(.9 + var(--cuboid-row-position) * .1);
+  position: relative;
+  width: calc(var(--cuboid-width) * var(--cuboid-scale)) !important;
+  height: calc(var(--cuboid-height) * var(--cuboid-scale)) !important;
+  min-height: 0 !important;
+  flex: 0 0 auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  transform-style: preserve-3d;
+  transform-origin: 50% 100%;
+}
+
+.seat-rack .cuboid-tile::before,
+.seat-rack .cuboid-tile::after { content: none !important; }
+
+.cuboid-face {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  backface-visibility: hidden;
+  border: 1px solid var(--cuboid-line);
+  pointer-events: none;
+}
+
+.cuboid-face-back,
+.cuboid-face-front {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.cuboid-face-back {
+  transform: translateZ(calc(var(--cuboid-depth) / 2));
+  background:
+    linear-gradient(135deg, transparent 0 37%, var(--cuboid-highlight) 38% 42%, transparent 43%),
+    linear-gradient(155deg, var(--cuboid-back-light), var(--cuboid-back-mid) 58%, var(--cuboid-back-dark));
+  box-shadow:
+    inset 0 0 0 3px var(--cuboid-back-mid),
+    inset 0 0 0 4px var(--cuboid-line),
+    inset 0 1px 0 var(--cuboid-highlight);
+}
+
+.cuboid-face-front {
+  transform: rotateY(180deg) translateZ(calc(var(--cuboid-depth) / 2));
+  background: linear-gradient(145deg, var(--cuboid-ivory-light), var(--cuboid-ivory-mid));
+}
+
+.cuboid-face-left,
+.cuboid-face-right {
+  top: 0;
+  left: calc(50% - var(--cuboid-depth) / 2);
+  width: var(--cuboid-depth);
+  height: 100%;
+  border-radius: 2px;
+}
+
+.cuboid-face-left {
+  transform: rotateY(-90deg) translateZ(calc(var(--cuboid-width) / 2));
+  background: linear-gradient(90deg, var(--cuboid-ivory-dark), var(--cuboid-ivory-mid));
+}
+
+.cuboid-face-right {
+  transform: rotateY(90deg) translateZ(calc(var(--cuboid-width) / 2));
+  background: linear-gradient(90deg, var(--cuboid-ivory-mid), var(--cuboid-ivory-light));
+}
+
+.cuboid-face-top,
+.cuboid-face-bottom {
+  left: 0;
+  top: calc(50% - var(--cuboid-depth) / 2);
+  width: 100%;
+  height: var(--cuboid-depth);
+  border-radius: 2px;
+}
+
+.cuboid-face-top {
+  transform: rotateX(90deg) translateZ(calc(var(--cuboid-height) / 2));
+  background: linear-gradient(180deg, var(--cuboid-ivory-light), var(--cuboid-ivory-mid));
+}
+
+.cuboid-face-bottom {
+  transform: rotateX(-90deg) translateZ(calc(var(--cuboid-height) / 2));
+  background: var(--cuboid-ivory-dark);
+}
+
+/* Far player: backs face the camera; a little top plane proves the tiles stand on the table. */
+.seat-rack-2 .cuboid-tile {
+  --cuboid-scale: 1;
+  transform: rotateX(-7deg) !important;
+  filter: drop-shadow(0 7px 5px var(--cuboid-shadow));
+}
+
+/* Side players: portrait cuboids, not landscape cards. Opposite yaw exposes the inner ivory edge. */
+.seat-rack-1 .cuboid-tile {
+  transform: rotateX(-14deg) rotateY(-31deg) !important;
+  filter: drop-shadow(7px 8px 6px var(--cuboid-shadow));
+}
+
+.seat-rack-3 .cuboid-tile {
+  transform: rotateX(-14deg) rotateY(31deg) !important;
+  filter: drop-shadow(-7px 8px 6px var(--cuboid-shadow));
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --cuboid-width: clamp(19px, 2.25vw, 24px);
+    --cuboid-height: clamp(28px, 3.15vw, 34px);
+    --cuboid-depth: clamp(11px, 1.15vw, 14px);
+  }
+}
+
+@media (orientation: portrait) {
+  :root {
+    --cuboid-width: clamp(17px, 5vw, 22px);
+    --cuboid-height: clamp(25px, 7vw, 31px);
+    --cuboid-depth: clamp(9px, 2.7vw, 12px);
+  }
+  .seat-rack-1 .cuboid-tile { transform: rotateX(-10deg) rotateY(-25deg) !important; }
+  .seat-rack-3 .cuboid-tile { transform: rotateX(-10deg) rotateY(25deg) !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-rack .cuboid-tile,
+  .seat-rack .cuboid-face { transition: none !important; animation: none !important; }
+}

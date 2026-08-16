@@ -1,0 +1,273 @@
+/* Hallmark · component: four-seat physical racks · macrostructure: player-local rack workbench
+ * genre: atmospheric · tone: premium physical table · palette: existing Jun navy / warm amber
+ * states: idle · concealed · called · riichi-followup · compact · portrait · reduced-motion
+ * contrast: pass (40–41) · responsive: pass (320–1920px, overflow 0)
+ * pre-emit critique: P5 H5 E5 S5 R5 V4
+ */
+
+:root {
+  --rack-back-w: clamp(24px, 2.15vw, 28px);
+  --rack-back-h: calc(var(--rack-back-w) * 1.34);
+  --rack-side-w: clamp(31px, 2.9vw, 38px);
+  --rack-side-pitch: clamp(20px, 1.82vw, 24px);
+  --rack-open-w: clamp(19px, 1.86vw, 24px);
+  --rack-open-h: calc(var(--rack-open-w) * 1.34);
+  --rack-group-gap: clamp(8px, .8vw, 12px);
+  --rack-tile-gap: 1px;
+  --rack-amber-high: oklch(83% .13 76);
+  --rack-amber-mid: oklch(69% .16 64);
+  --rack-amber-low: oklch(42% .12 55);
+  --rack-ivory-side: oklch(90% .045 82);
+  --rack-side-low: oklch(43% .08 55);
+  --rack-back-line: oklch(31% .055 52 / .88);
+  --rack-back-mark: oklch(43% .105 54 / .76);
+  --rack-gloss: oklch(98% .02 90 / .62);
+  --rack-shadow: oklch(4% .012 250 / .62);
+}
+
+/*
+ * 一つの席を一つのrackとして扱う。手牌と副露を別々の画面座標へ置かない。
+ * DOM順がそのまま「打ち手から見た自辺右端」を表す:
+ * 自席=画面右、右家=画面上、対面=画面左、左家=画面下。
+ */
+.seat-rack {
+  position: absolute;
+  z-index: 13;
+  display: flex;
+  align-items: center;
+  gap: var(--rack-group-gap);
+  width: max-content;
+  height: max-content;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.seat-rack-2 {
+  top: 0;
+  left: 50%;
+  flex-direction: row;
+  align-items: flex-end;
+  transform: translateX(-50%);
+}
+
+.seat-rack-1 {
+  top: 52%;
+  right: 1.15%;
+  flex-direction: column;
+  align-items: flex-end;
+  transform: translateY(-50%) rotate(-20deg);
+  transform-origin: center;
+}
+
+.seat-rack-3 {
+  top: 52%;
+  left: 1.15%;
+  flex-direction: column;
+  align-items: flex-start;
+  transform: translateY(-50%) rotate(20deg);
+  transform-origin: center;
+}
+
+/* Previous layers positioned each strip independently. Inside a seat rack they are local flows. */
+.seat-rack > .back-strip {
+  position: relative !important;
+  inset: auto !important;
+  margin: 0 !important;
+  display: flex;
+  justify-content: flex-start;
+  gap: var(--rack-tile-gap);
+  filter: none;
+  transform: none !important;
+  transform-style: preserve-3d;
+}
+
+.seat-rack-2 > .back-strip { flex-direction: row; align-items: flex-end; }
+.seat-rack-1 > .back-strip,
+.seat-rack-3 > .back-strip { flex-direction: column; align-items: center; }
+
+/* Same amber back material for all three opponents. Blue slabs are deliberately removed. */
+.seat-rack .btile {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: visible;
+  border: 1px solid var(--rack-back-line);
+  border-radius: 4px 4px 3px 3px;
+  background:
+    linear-gradient(135deg, var(--rack-gloss), transparent 24%),
+    linear-gradient(180deg, var(--rack-amber-high), var(--rack-amber-mid) 58%, var(--rack-amber-low));
+  transform: none !important;
+}
+
+.seat-rack > .back-strip .btile::after {
+  content: '';
+  position: absolute;
+  border: 1px solid var(--rack-back-line);
+  border-radius: 2px;
+  background:
+    linear-gradient(135deg, var(--rack-gloss), transparent 22%),
+    linear-gradient(180deg, var(--rack-amber-high), var(--rack-amber-mid));
+  box-shadow: inset 0 1px 0 var(--rack-gloss);
+}
+
+#rack-2 > #strip-top .btile {
+  width: var(--rack-back-w);
+  height: var(--rack-back-h);
+  min-height: 0;
+  box-shadow:
+    inset 0 1px 0 var(--rack-gloss),
+    0 3px 0 var(--rack-ivory-side),
+    0 5px 0 var(--rack-side-low),
+    0 8px 8px var(--rack-shadow);
+}
+
+.seat-rack-2 > .back-strip .btile::after { inset: 6px 5px 7px; }
+
+/* A side player's standing tile is landscape on screen: long axis points into the table. */
+#rack-1 > #strip-right .btile,
+#rack-3 > #strip-left .btile {
+  width: var(--rack-side-w);
+  height: var(--rack-side-pitch);
+}
+
+#rack-1 > #strip-right .btile {
+  box-shadow:
+    inset 0 1px 0 var(--rack-gloss),
+    3px 1px 0 var(--rack-ivory-side),
+    5px 2px 0 var(--rack-side-low),
+    8px 4px 8px var(--rack-shadow);
+}
+
+#rack-3 > #strip-left .btile {
+  box-shadow:
+    inset 0 1px 0 var(--rack-gloss),
+    -3px 1px 0 var(--rack-ivory-side),
+    -5px 2px 0 var(--rack-side-low),
+    -8px 4px 8px var(--rack-shadow);
+}
+
+.seat-rack-1 > .back-strip .btile::after,
+.seat-rack-3 > .back-strip .btile::after { inset: 4px 7px; }
+
+/* Called sets occupy the right end of the same rack, not a free-floating table coordinate. */
+.seat-rack > .seat-melds,
+#rack-0 > #my-melds {
+  position: relative !important;
+  inset: auto !important;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--rack-group-gap);
+  transform: none !important;
+  transform-origin: center;
+}
+
+.seat-rack > .seat-melds.is-empty { display: none; }
+.seat-rack .meld-slot { position: relative; flex: 0 0 auto; }
+.seat-rack .meld { width: max-content; }
+.seat-rack .seat-melds .tile {
+  --tile-depth: 3px;
+  width: var(--rack-open-w);
+  height: var(--rack-open-h);
+}
+
+/* Top player faces downward; its called set is at that player's right (screen left). */
+.seat-rack-2 .seat-melds { transform: rotate(180deg) !important; }
+.seat-rack-2 .meld-slot { width: max-content; height: var(--rack-open-h); }
+
+/* Side-player melds get an explicit rotated footprint, so they cannot drift into the river. */
+.seat-rack-1 .seat-melds,
+.seat-rack-3 .seat-melds { flex-direction: column; }
+
+.seat-rack-1 .meld-slot,
+.seat-rack-3 .meld-slot {
+  width: var(--rack-open-h);
+  height: calc(var(--rack-open-w) * 3.75);
+}
+
+.seat-rack-1 .meld-slot > .meld,
+.seat-rack-3 .meld-slot > .meld {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
+
+.seat-rack-1 .meld-slot > .meld { transform: translate(-50%, -50%) rotate(-90deg); }
+.seat-rack-3 .meld-slot > .meld { transform: translate(-50%, -50%) rotate(90deg); }
+
+/* Bottom player's called sets are at the visible right end of their own hand. */
+#rack-0 {
+  left: 50%;
+  bottom: 5px;
+  z-index: 4;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: clamp(12px, 1.2vw, 18px);
+  max-width: 100%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#rack-0 > #my-hand {
+  position: relative;
+  left: auto;
+  bottom: auto;
+  transform: none;
+}
+
+#rack-0 > #my-melds {
+  z-index: 5;
+  justify-content: flex-start;
+  align-items: flex-end;
+  flex-direction: row;
+}
+
+#rack-0 #my-melds .meld-slot { width: max-content; }
+#rack-0 #my-melds .tile {
+  --tile-depth: 5px;
+  width: var(--hand-tile-w);
+  height: calc(var(--hand-tile-w) * 1.36);
+}
+
+/* The claimed tile remains sideways inside the owner's local orientation. */
+.seat-rack .tile.sideways {
+  z-index: 2;
+  margin-inline: clamp(5px, .55vw, 8px);
+  transform: rotate(90deg) translateY(1px);
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --rack-back-w: clamp(20px, 2.3vw, 25px);
+    --rack-side-w: clamp(27px, 3vw, 32px);
+    --rack-side-pitch: clamp(17px, 1.8vw, 20px);
+    --rack-open-w: clamp(16px, 1.8vw, 20px);
+  }
+
+  .seat-rack-1,
+  .seat-rack-3 { top: 53%; }
+  #rack-0 { bottom: 1px; gap: 9px; }
+}
+
+@media (orientation: portrait) {
+  :root {
+    --rack-back-w: clamp(18px, 5vw, 22px);
+    --rack-side-w: clamp(25px, 7vw, 30px);
+    --rack-side-pitch: clamp(15px, 4.4vw, 19px);
+    --rack-open-w: clamp(15px, 4.2vw, 19px);
+    --rack-group-gap: 6px;
+  }
+
+  .seat-rack-1 { right: 1%; transform: translateY(-50%) rotate(-5deg); }
+  .seat-rack-3 { left: 1%; transform: translateY(-50%) rotate(5deg); }
+  #rack-0 { bottom: 0; gap: 6px; }
+  #rack-0 #my-melds { transform: scale(.86) !important; transform-origin: left bottom; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-rack,
+  .seat-rack .btile,
+  .seat-rack .meld { transition: none !important; }
+}

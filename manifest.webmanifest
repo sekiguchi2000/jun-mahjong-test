@@ -1,0 +1,14 @@
+{
+  "name": "純麻雀",
+  "short_name": "純麻雀",
+  "description": "斜め俯瞰の立体卓で打つ、牌操作なし・COM不正なしの四人打ち麻雀",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#05080e",
+  "theme_color": "#071426",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

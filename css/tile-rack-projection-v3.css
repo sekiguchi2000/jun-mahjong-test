@@ -1,0 +1,141 @@
+/* Hallmark · component: spectator-readable side-seat standing tiles
+ * studied-DNA: public mahjong game reference supplied by the user
+ * geometry: broad amber back + equally legible ivory body + dense overlapping pitch
+ * pre-emit critique: P5 H5 E5 S5 R5 V5
+ */
+
+:root {
+  --side-projected-width: clamp(40px, 3.65vw, 47px);
+  --side-projected-pitch: clamp(20px, 1.82vw, 23px);
+  --side-projected-depth: clamp(12px, 1.12vw, 15px);
+  --side-projected-back: clamp(30px, 2.65vw, 34px);
+  --side-projected-overlap: clamp(2px, .2vw, 3px);
+  --side-amber-light: oklch(84% .15 78);
+  --side-amber-mid: oklch(69% .18 65);
+  --side-amber-dark: oklch(43% .12 52);
+  --side-ivory-light: oklch(97% .03 91);
+  --side-ivory-mid: oklch(84% .055 82);
+  --side-ivory-dark: oklch(64% .06 70);
+  --side-edge-ink: oklch(26% .06 48 / .92);
+  --side-contact-shadow: oklch(5% .016 252 / .82);
+  --side-gloss: oklch(99% .018 92 / .7);
+}
+
+/*
+ * Side hands are deliberately screen-projected instead of pushed to a literal 90deg side view.
+ * This is the spectator convention used by commercial mahjong games: the owner still conceals
+ * the face, while the viewer gets enough amber back and ivory body to read an upright tile.
+ */
+.seat-rack-1 .cuboid-tile,
+.seat-rack-3 .cuboid-tile {
+  --cuboid-tile-width: var(--side-projected-width);
+  --cuboid-tile-height: var(--side-projected-pitch);
+  width: var(--side-projected-width) !important;
+  height: var(--side-projected-pitch) !important;
+  margin-block: calc(-1 * var(--side-projected-overlap));
+  transform: scale(var(--cuboid-scale, 1)) !important;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 5px 4px var(--side-contact-shadow));
+}
+
+.seat-rack-1 .cuboid-face,
+.seat-rack-3 .cuboid-face {
+  transform: none;
+  backface-visibility: visible;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.seat-rack-1 .cuboid-face-front,
+.seat-rack-1 .cuboid-face-top,
+.seat-rack-1 .cuboid-face-bottom,
+.seat-rack-1 .cuboid-face-left,
+.seat-rack-3 .cuboid-face-front,
+.seat-rack-3 .cuboid-face-top,
+.seat-rack-3 .cuboid-face-bottom,
+.seat-rack-3 .cuboid-face-right {
+  display: none;
+}
+
+/* Right seat: amber is on the felt side, ivory body reaches toward its owner. */
+.seat-rack-1 .cuboid-face-back {
+  display: block;
+  inset: 0 auto 0 0;
+  z-index: 2;
+  width: var(--side-projected-back);
+  height: 100%;
+  clip-path: polygon(0 12%, 88% 0, 100% 84%, 10% 100%);
+  border: 1px solid var(--side-edge-ink);
+  background:
+    linear-gradient(140deg, transparent 0 34%, var(--side-gloss) 35% 39%, transparent 40%),
+    linear-gradient(155deg, var(--side-amber-light), var(--side-amber-mid) 60%, var(--side-amber-dark));
+  box-shadow:
+    inset 0 0 0 2px var(--side-amber-dark),
+    inset 0 0 0 4px var(--side-amber-mid);
+}
+
+.seat-rack-1 .cuboid-face-right {
+  display: block;
+  inset: 1px 0 1px auto;
+  z-index: 1;
+  width: var(--side-projected-depth);
+  height: auto;
+  clip-path: polygon(0 0, 100% 14%, 100% 88%, 0 100%);
+  border: 1px solid var(--side-edge-ink);
+  background: linear-gradient(135deg, var(--side-ivory-light), var(--side-ivory-mid) 58%, var(--side-ivory-dark));
+  box-shadow: inset 0 2px 0 var(--side-gloss);
+}
+
+/* Left seat mirrors the physical body; no bitmap or whole-row flip is used. */
+.seat-rack-3 .cuboid-face-back {
+  display: block;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: var(--side-projected-back);
+  height: 100%;
+  clip-path: polygon(12% 0, 100% 12%, 90% 100%, 0 84%);
+  border: 1px solid var(--side-edge-ink);
+  background:
+    linear-gradient(220deg, transparent 0 34%, var(--side-gloss) 35% 39%, transparent 40%),
+    linear-gradient(205deg, var(--side-amber-light), var(--side-amber-mid) 60%, var(--side-amber-dark));
+  box-shadow:
+    inset 0 0 0 2px var(--side-amber-dark),
+    inset 0 0 0 4px var(--side-amber-mid);
+}
+
+.seat-rack-3 .cuboid-face-left {
+  display: block;
+  inset: 1px auto 1px 0;
+  z-index: 1;
+  width: var(--side-projected-depth);
+  height: auto;
+  clip-path: polygon(0 14%, 100% 0, 100% 100%, 0 88%);
+  border: 1px solid var(--side-edge-ink);
+  background: linear-gradient(225deg, var(--side-ivory-light), var(--side-ivory-mid) 58%, var(--side-ivory-dark));
+  box-shadow: inset 0 2px 0 var(--side-gloss);
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --side-projected-width: clamp(34px, 4vw, 40px);
+    --side-projected-pitch: clamp(17px, 2vw, 20px);
+    --side-projected-depth: clamp(10px, 1.2vw, 13px);
+    --side-projected-back: clamp(26px, 3vw, 30px);
+  }
+}
+
+@media (orientation: portrait) {
+  :root {
+    --side-projected-width: clamp(29px, 8.4vw, 36px);
+    --side-projected-pitch: clamp(15px, 4.3vw, 18px);
+    --side-projected-depth: clamp(9px, 2.8vw, 12px);
+    --side-projected-back: clamp(22px, 6.4vw, 27px);
+    --side-projected-overlap: 1px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seat-rack-1 .cuboid-tile,
+  .seat-rack-3 .cuboid-tile { transition: none !important; }
+}

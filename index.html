@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#071426">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>純麻雀</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/style.css?v=12">
+<link rel="stylesheet" href="css/table-v9.css?v=16">
+<link rel="stylesheet" href="css/tokens-v15.css?v=15">
+<link rel="stylesheet" href="css/learning-modes-v15.css?v=17">
+<link rel="stylesheet" href="css/product-ui-v16.css?v=1">
+<link rel="stylesheet" href="css/product-ui-v17.css?v=1">
+<link rel="stylesheet" href="css/are-report-v1.css?v=1">
+<link rel="stylesheet" href="css/win-cinematic-v1.css?v=3">
+<link rel="stylesheet" href="css/tile-3d-v1.css?v=1">
+<link rel="stylesheet" href="css/riichi-stick-v1.css?v=1">
+<link rel="stylesheet" href="css/title-cinematic-v1.css?v=1">
+<link rel="stylesheet" href="css/table-physical-v2.css?v=1">
+<link rel="stylesheet" href="css/table-geometry-v3.css?v=1">
+<link rel="stylesheet" href="css/table-geometry-v4.css?v=1">
+<link rel="stylesheet" href="css/tile-cuboid-v2.css?v=1">
+<link rel="stylesheet" href="css/tabletop-projection-v1.css?v=1">
+<link rel="stylesheet" href="css/webgl-tabletop-v1.css?v=4">
+</head>
+<body>
+<div id="app">
+
+  <!-- タイトル/設定画面 -->
+  <div id="screen-title" class="screen" data-gamepad-scope="title">
+    <div class="title-atmosphere" aria-hidden="true">
+      <div class="title-atmosphere-image"></div>
+      <div class="title-atmosphere-vignette"></div>
+      <span class="title-light title-light-left"></span>
+      <span class="title-light title-light-right"></span>
+      <span class="title-spark title-spark-one"></span>
+      <span class="title-spark title-spark-two"></span>
+    </div>
+    <div class="title-box">
+      <div class="title-rail" aria-hidden="true"><span></span><i></i><span></span></div>
+      <header class="title-hero">
+        <div class="title-kicker">RIICHI MAHJONG · PRIVATE TABLE</div>
+        <h1><span>純</span><span>麻雀</span></h1>
+        <p class="subtitle">牌を読む。相手を読む。一局ずつ、強くなる。</p>
+      </header>
+      <div class="opponent-line title-rivals" aria-label="対局相手: 半蔵、ジョー、ひめ子">
+        <span class="title-rival"><span class="opponent-portrait hanzou"></span><small>半蔵</small></span>
+        <span class="title-rival"><span class="opponent-portrait joe"></span><small>ジョー</small></span>
+        <span class="title-rival"><span class="opponent-portrait himeko"></span><small>ひめ子</small></span>
+      </div>
+      <div class="title-actions">
+        <button id="btn-start" class="btn primary big" data-gamepad-default><span>対局を始める</span><small>新しい半荘</small></button>
+        <button id="btn-resume-session" class="btn big hidden">保存対局を再開</button>
+      </div>
+      <details class="title-setup" id="title-setup">
+        <summary><span>対局と学びの設定</span><small>必要なときだけ開く</small></summary>
+        <div class="title-setup-body">
+          <fieldset class="learning-mode-picker">
+            <legend>LEARNING TABLE</legend>
+            <label class="learning-mode-option" for="review-mode-toggle">
+              <span class="learning-mode-copy"><strong>局後感想戦</strong><small>あなたの全判断を3人が採点</small></span>
+              <input id="review-mode-toggle" type="checkbox" role="switch">
+              <span class="learning-switch" aria-hidden="true"></span>
+            </label>
+            <label class="learning-mode-option" for="thought-mode-toggle">
+              <span class="learning-mode-copy"><strong>思考公開</strong><small>COMの判断根拠を対局中に表示</small></span>
+              <input id="thought-mode-toggle" type="checkbox" role="switch">
+              <span class="learning-switch" aria-hidden="true"></span>
+            </label>
+            <label class="learning-mode-option" for="coach-mode-toggle">
+              <span class="learning-mode-copy"><strong>打ち手ガイド</strong><small>あなたと同じ公開情報だけで選択を解説</small></span>
+              <input id="coach-mode-toggle" type="checkbox" role="switch">
+              <span class="learning-switch" aria-hidden="true"></span>
+            </label>
+            <label class="learning-duration-option" for="thought-duration-select">
+              <span><strong>思考表示時間</strong><small>読み終えるまで対局を止めます</small></span>
+              <select id="thought-duration-select" aria-label="思考公開の表示時間">
+                <option value="3">3秒</option>
+                <option value="6">6秒</option>
+                <option value="10" selected>10秒</option>
+                <option value="15">15秒</option>
+                <option value="manual">手動送り</option>
+              </select>
+            </label>
+          </fieldset>
+          <button id="btn-rules" class="btn big">ルール設定</button>
+        </div>
+      </details>
+      <p id="title-session-status" class="session-status" role="status" aria-live="polite"></p>
+      <p class="note">COMは自分の手牌と公開情報だけを見ます。</p>
+      <p class="voice-credits">音声: VOICEVOX:麒ヶ島宗麟／VOICEVOX:玄野武宏(CV:ガロ)／VOICEVOX:冥鳴ひまり</p>
+    </div>
+  </div>
+
+  <!-- ルール設定画面 -->
+  <div id="screen-rules" class="screen hidden" data-gamepad-scope="rules">
+    <div class="rules-box">
+      <h2>ルール設定</h2>
+      <div id="rules-list"></div>
+      <button id="btn-rules-done" class="btn primary big">保存して戻る</button>
+    </div>
+  </div>
+
+  <!-- 対局画面 -->
+  <div id="screen-game" class="screen hidden" data-gamepad-scope="board">
+    <div id="board">
+      <div id="match-mark" aria-hidden="true"><strong><i>純</i></strong><span>JUN<br>PRIVATE TABLE</span></div>
+      <div id="webgl-tabletop" role="img" aria-label="四家の手牌、河、副露、牌山を一つのカメラで描く麻雀卓"></div>
+      <div id="table-wrap">
+        <div id="table-plane">
+          <div id="seat-scene-2" class="tabletop-seat-scene seat-scene-2" data-seat="2">
+            <div id="rack-2" class="seat-rack seat-rack-2" data-seat="2" aria-label="ジョーの手牌と副露">
+              <div id="melds-2" class="seat-melds seat-melds-2" aria-label="ジョーの副露"></div>
+              <div id="strip-top" class="back-strip horizontal concealed-rack" aria-label="ジョーの手牌"></div>
+            </div>
+            <div class="river-cell top"><div class="river" id="river-2"></div></div>
+          </div>
+          <div id="seat-scene-3" class="tabletop-seat-scene seat-scene-3" data-seat="3">
+            <div id="rack-3" class="seat-rack seat-rack-3" data-seat="3" aria-label="ひめ子の手牌と副露">
+              <div id="strip-left" class="back-strip vertical concealed-rack" aria-label="ひめ子の手牌"></div>
+              <div id="melds-3" class="seat-melds seat-melds-3" aria-label="ひめ子の副露"></div>
+            </div>
+            <div class="river-cell left"><div class="river" id="river-3"></div></div>
+          </div>
+          <div id="seat-scene-1" class="tabletop-seat-scene seat-scene-1" data-seat="1">
+            <div id="rack-1" class="seat-rack seat-rack-1" data-seat="1" aria-label="半蔵の手牌と副露">
+              <div id="melds-1" class="seat-melds seat-melds-1" aria-label="半蔵の副露"></div>
+              <div id="strip-right" class="back-strip vertical concealed-rack" aria-label="半蔵の手牌"></div>
+            </div>
+            <div class="river-cell right"><div class="river" id="river-1"></div></div>
+          </div>
+          <div id="seat-scene-0" class="tabletop-seat-scene seat-scene-0" data-seat="0">
+            <div class="river-cell bottom"><div class="river" id="river-0"></div></div>
+          </div>
+          <div id="table">
+            <div id="center"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="chip tl" id="chip-3"></div>
+      <div class="chip tr" id="chip-2"></div>
+      <div class="chip bl" id="chip-0"></div>
+      <div class="chip br" id="chip-1"></div>
+
+      <aside id="thought-seat-1" class="seat-thought seat-1 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
+        <span class="seat-thought-speaker">半蔵の思考</span>
+        <strong class="seat-thought-headline">公開情報を照合中</strong>
+        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
+        <div class="seat-thought-metrics"></div>
+        <div class="seat-thought-actions">
+          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
+          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
+        </div>
+      </aside>
+      <aside id="thought-seat-2" class="seat-thought seat-2 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
+        <span class="seat-thought-speaker">ジョーの思考</span>
+        <strong class="seat-thought-headline">公開情報を照合中</strong>
+        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
+        <div class="seat-thought-metrics"></div>
+        <div class="seat-thought-actions">
+          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
+          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
+        </div>
+      </aside>
+      <aside id="thought-seat-3" class="seat-thought seat-3 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
+        <span class="seat-thought-speaker">ひめ子の思考</span>
+        <strong class="seat-thought-headline">公開情報を照合中</strong>
+        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
+        <div class="seat-thought-metrics"></div>
+        <div class="seat-thought-actions">
+          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
+          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
+        </div>
+      </aside>
+
+      <section id="dealer-ceremony" class="dealer-ceremony hidden" role="status" aria-live="polite" aria-atomic="true">
+        <div class="dealer-ceremony-banner">
+          <small>OPENING DEALER</small>
+          <strong id="dealer-ceremony-title">起家を決定</strong>
+          <div class="dealer-dice" aria-label="サイコロ">
+            <span id="dealer-die-1" aria-hidden="true">—</span>
+            <span id="dealer-die-2" aria-hidden="true">—</span>
+          </div>
+          <p id="dealer-ceremony-status">仮東を選んでいます</p>
+        </div>
+        <ol class="dealer-seat-count" aria-hidden="true">
+          <li data-dealer-seat="0"><span>0</span><strong>あなた</strong></li>
+          <li data-dealer-seat="1"><span>1</span><strong>半蔵</strong></li>
+          <li data-dealer-seat="2"><span>2</span><strong>ジョー</strong></li>
+          <li data-dealer-seat="3"><span>3</span><strong>ひめ子</strong></li>
+        </ol>
+      </section>
+
+      <button id="are-report-button" class="are-report-button" type="button" title="COMやガイドの判断に「あれ?」と思ったら押してください。その瞬間の局面が記録され、開発者に共有できます">あれ?</button>
+
+      <button id="pause-button" class="pause-button" type="button" data-gamepad-menu data-gamepad-shortcut aria-haspopup="dialog" aria-controls="pause-dialog">
+        <span aria-hidden="true">Ⅱ</span><span>中断</span><kbd class="gamepad-key-hint">Menu</kbd>
+      </button>
+
+      <label id="no-claims-control" class="no-claims-control" data-gamepad-shortcut title="ポン・チー・明槓の確認を自動でスルーします">
+        <input id="no-claims-toggle" type="checkbox">
+        <span>鳴きなし</span>
+        <span class="no-claims-state" aria-hidden="true"></span>
+        <kbd class="gamepad-key-hint">X</kbd>
+      </label>
+      <div id="my-area">
+        <aside id="coach-panel" class="coach-panel hidden" aria-live="polite" aria-atomic="true">
+          <div class="coach-panel-heading"><span>PLAY COACH</span><strong id="coach-title">打ち手ガイド</strong><button id="coach-collapse" class="coach-collapse" type="button" aria-expanded="true">隠す</button></div>
+          <div class="coach-advice">
+            <div id="coach-tile-visual" class="coach-tile-visual" aria-hidden="true"></div>
+            <div class="coach-copy"><p id="coach-recommendation">候補を比べています。</p><p id="coach-explanation">理由を短く表示します。</p></div>
+          </div>
+          <button id="coach-more" class="coach-more hidden" type="button" data-gamepad-group="coach" aria-haspopup="dialog" aria-controls="coach-detail-dialog">全て表示</button>
+        </aside>
+        <div id="wait-hint" class="hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+        <div id="rack-0" class="seat-rack seat-rack-0" data-seat="0" aria-label="あなたの手牌と副露">
+          <div id="my-hand"></div>
+          <div id="my-melds" class="seat-melds seat-melds-0" aria-label="あなたの副露"></div>
+        </div>
+        <div id="action-bar"></div>
+      </div>
+      <div id="orientation-hint" aria-hidden="true"><span class="rotate-icon">↻</span><span>横向きでワイド卓</span></div>
+    </div>
+    <div id="callout" class="hidden"></div>
+    <div id="riichi-stick-cinematic" class="hidden" aria-hidden="true">
+      <div class="riichi-stick-impact"></div>
+      <div class="riichi-stick-prop"><span class="riichi-stick-value">1000</span></div>
+    </div>
+    <div id="cutin" class="hidden"></div>
+    <div id="win-cinematic" class="hidden" aria-hidden="true"></div>
+    <div id="splash" class="hidden"></div>
+    <div id="overlay" class="hidden" data-gamepad-scope="result">
+      <div id="overlay-content"></div>
+    </div>
+  </div>
+
+</div>
+
+<dialog id="review-dialog" aria-labelledby="review-title" data-gamepad-scope="review">
+  <section class="review-shell">
+    <header class="review-header">
+      <div><small>ROUND REVIEW</small><h2 id="review-title">局後感想戦</h2></div>
+      <div class="review-summary"><span>総合</span><strong id="review-overall-score">—</strong><small id="review-progress">0 / 0</small></div>
+    </header>
+    <div class="review-workspace">
+      <nav class="review-timeline" aria-label="あなたの打牌一覧">
+        <p>DECISION LOG</p>
+        <ol id="review-timeline-list"></ol>
+      </nav>
+      <main class="review-analysis">
+        <div class="review-choice-block">
+          <span id="review-decision-number" class="review-eyebrow">判断 —</span>
+          <h3 id="review-choice">—</h3>
+          <p id="review-recommendation">評価を準備しています。</p>
+        </div>
+        <div id="review-comments" class="review-comments"></div>
+      </main>
+    </div>
+    <footer class="review-footer">
+      <button id="review-prev" class="review-nav" type="button" data-gamepad-prev>前の判断</button>
+      <button id="review-close" class="review-close" type="button" data-gamepad-back data-gamepad-default>卓へ戻る</button>
+      <button id="review-next" class="review-nav" type="button" data-gamepad-next>次の判断</button>
+    </footer>
+  </section>
+</dialog>
+
+<dialog id="coach-detail-dialog" aria-labelledby="coach-detail-title" data-gamepad-scope="coach-detail">
+  <section class="coach-detail-shell">
+    <header class="coach-detail-header">
+      <div>
+        <span>PLAY COACH</span>
+        <h2 id="coach-detail-title">判断の理由</h2>
+      </div>
+      <div class="coach-detail-choice"><div id="coach-detail-tile-visual" class="coach-tile-visual" aria-hidden="true"></div><strong id="coach-detail-recommendation">—</strong></div>
+    </header>
+    <div class="coach-detail-scroll">
+      <div id="coach-detail-body"></div>
+    </div>
+    <footer class="coach-detail-footer">
+      <button id="coach-detail-close" type="button" data-gamepad-back data-gamepad-default>ガイドへ戻る</button>
+    </footer>
+  </section>
+</dialog>
+
+<dialog id="thought-detail-dialog" aria-labelledby="thought-detail-title" aria-describedby="thought-detail-summary" data-gamepad-scope="thought-detail">
+  <section class="thought-detail-shell">
+    <header class="thought-detail-header">
+      <div>
+        <span id="thought-detail-speaker">COMの思考</span>
+        <h2 id="thought-detail-title">判断の全文</h2>
+      </div>
+    </header>
+    <div class="thought-detail-scroll">
+      <p id="thought-detail-summary">公開情報から判断した理由を表示します。</p>
+      <dl id="thought-detail-details"></dl>
+    </div>
+    <footer class="thought-detail-footer">
+      <button id="thought-detail-back" type="button" data-gamepad-back>思考へ戻る</button>
+      <button id="thought-detail-next" type="button" data-gamepad-default>次へ</button>
+    </footer>
+  </section>
+</dialog>
+
+<dialog id="pause-dialog" aria-labelledby="pause-title" data-gamepad-scope="pause">
+  <section class="pause-shell">
+    <header class="pause-header">
+      <div><small>PAUSE</small><h2 id="pause-title">対局を中断</h2></div>
+      <span id="gamepad-status" class="gamepad-status" data-gamepad-status>ゲームパッド未接続</span>
+    </header>
+    <div class="pause-content">
+      <section class="pause-actions" aria-label="対局操作">
+        <button id="pause-resume" class="pause-primary" type="button" data-gamepad-default data-gamepad-back data-gamepad-menu>対局へ戻る</button>
+        <button id="pause-save" type="button">この場面を保存</button>
+        <button id="pause-save-title" type="button">保存してタイトルへ</button>
+        <button id="pause-title-only" type="button">タイトルへ戻る</button>
+        <button id="pause-export-reports" type="button">「あれ?」レポートを書き出す</button>
+        <p id="pause-save-status" class="pause-save-status" role="status" aria-live="polite"></p>
+      </section>
+      <section class="pause-settings" aria-labelledby="pause-settings-title">
+        <h3 id="pause-settings-title">対局中の設定</h3>
+        <label class="pause-setting-row" for="pause-thought-toggle">
+          <span><strong>思考公開</strong><small>次のCOM判断から反映</small></span>
+          <input id="pause-thought-toggle" type="checkbox" role="switch">
+        </label>
+        <label class="pause-setting-row" for="pause-coach-toggle">
+          <span><strong>打ち手ガイド</strong><small>あなたの手番で候補と理由を表示</small></span>
+          <input id="pause-coach-toggle" type="checkbox" role="switch">
+        </label>
+        <label class="pause-setting-row" for="pause-review-toggle">
+          <span><strong>局後感想戦</strong><small>この局の記録にも反映</small></span>
+          <input id="pause-review-toggle" type="checkbox" role="switch">
+        </label>
+        <label class="pause-setting-row" for="pause-no-calls-toggle">
+          <span><strong>鳴きなし</strong><small>ポン・チー・明槓を自動スルー</small></span>
+          <input id="pause-no-calls-toggle" type="checkbox" role="switch">
+        </label>
+        <label class="pause-setting-row duration" for="pause-thought-duration">
+          <span><strong>思考の表示時間</strong><small>表示中は対局進行を停止</small></span>
+          <select id="pause-thought-duration">
+            <option value="3">3秒</option>
+            <option value="6">6秒</option>
+            <option value="10" selected>10秒</option>
+            <option value="15">15秒</option>
+            <option value="manual">手動送り</option>
+          </select>
+        </label>
+        <section class="pause-audio-settings" aria-labelledby="pause-audio-title">
+          <div class="pause-audio-heading"><strong id="pause-audio-title">音響</strong><small>同梱済み音源のみ・外部通信なし</small></div>
+          <label class="pause-setting-row" for="pause-audio-muted">
+            <span><strong>すべてミュート</strong><small>再生位置は保持します</small></span>
+            <input id="pause-audio-muted" type="checkbox" role="switch">
+          </label>
+          <label class="pause-setting-row" for="pause-voice-enabled">
+            <span><strong>キャラクター音声</strong><small>発声と短い思考要約</small></span>
+            <input id="pause-voice-enabled" type="checkbox" role="switch" checked>
+          </label>
+          <label class="pause-volume-row" for="pause-master-volume">
+            <span>全体</span><input id="pause-master-volume" type="range" min="0" max="100" step="1" value="80"><output id="pause-master-volume-value" for="pause-master-volume">80</output>
+          </label>
+          <label class="pause-volume-row" for="pause-music-volume">
+            <span>BGM</span><input id="pause-music-volume" type="range" min="0" max="100" step="1" value="55"><output id="pause-music-volume-value" for="pause-music-volume">55</output>
+          </label>
+          <label class="pause-volume-row" for="pause-voice-volume">
+            <span>音声</span><input id="pause-voice-volume" type="range" min="0" max="100" step="1" value="85"><output id="pause-voice-volume-value" for="pause-voice-volume">85</output>
+          </label>
+          <label class="pause-volume-row" for="pause-sfx-volume">
+            <span>効果音</span><input id="pause-sfx-volume" type="range" min="0" max="100" step="1" value="80"><output id="pause-sfx-volume-value" for="pause-sfx-volume">80</output>
+          </label>
+        </section>
+        <div class="pause-rules" aria-label="現在の対局ルール">
+          <strong>現在のルール</strong><p id="pause-rules-summary">確認中</p><small>公平性のため、対局ルールは次の対局から変更できます。</small>
+        </div>
+      </section>
+    </div>
+  </section>
+</dialog>
+
+<script type="module" src="js/ui/main.js?v=40"></script>
+<script src="js/ui/register-sw.js?v=14" defer></script>
+</body>
+</html>

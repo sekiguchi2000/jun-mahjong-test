@@ -1,0 +1,37 @@
+/* Hallmark · corrected side-rack projection
+ * Contract: side hands stay completely inside the felt and follow its painted edge.
+ * The rendered 16:9 felt edge is about 26deg. Per-tile perspective adds about 3.5deg,
+ * so the parent track is 22.5deg; v3's raw 20deg track drifted into the rail.
+ */
+
+:root {
+  --rack-side-edge-angle: 22.5deg;
+  --rack-side-felt-inset: clamp(42px, 4.2vw, 60px);
+}
+
+.seat-rack-1 {
+  top: 51%;
+  right: var(--rack-side-felt-inset);
+  transform: translateY(-50%) rotate(calc(-1 * var(--rack-side-edge-angle)));
+  transform-origin: center;
+}
+
+.seat-rack-3 {
+  top: 51%;
+  left: var(--rack-side-felt-inset);
+  transform: translateY(-50%) rotate(var(--rack-side-edge-angle));
+  transform-origin: center;
+}
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root { --rack-side-felt-inset: clamp(31px, 4.4vw, 44px); }
+  .seat-rack-1,
+  .seat-rack-3 { top: 51%; }
+}
+
+@media (orientation: portrait) {
+  :root {
+    --rack-side-edge-angle: 8deg;
+    --rack-side-felt-inset: clamp(16px, 5.5vw, 24px);
+  }
+}

@@ -1,0 +1,17 @@
+/* are-report-v1.css — 「あれ?」ボタン(違和感レポート) */
+.are-report-button {
+  appearance: none;
+  border: 1px solid rgba(214, 178, 94, 0.55);
+  border-radius: 10px;
+  background: rgba(12, 22, 34, 0.82);
+  color: #e8d9ac;
+  font: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.are-report-button:hover { background: rgba(24, 40, 58, 0.9); }
+.are-report-button:active { transform: translateY(1px); }
+.are-report-button[data-flash='1'] { border-color: #9fd48f; color: #cfe9c4; }
