@@ -32,6 +32,7 @@ import {
 import { presentReviewDecision, presentThought } from './decision-presenter.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.js?v=4';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
+import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
 import { AudioDirector } from './audio-director.js?v=17';
 import { classifyWinPresentation, winCinematicCopy, winSuspenseDuration } from './win-presentation.js?v=3';
@@ -316,6 +317,7 @@ class UI {
     this.coachMode = learningModes.coachMode;
     this.thoughtDuration = learningModes.thoughtDuration;
     this.thoughtSequence = 0;
+    this.stats = new StatsTracker();
     this.calloutSequence = 0;
     this.riichiStickSequence = 0;
     this.winCinematicSequence = 0;
@@ -501,6 +503,13 @@ class UI {
     $('#pause-resume')?.addEventListener('click', () => this.closePause());
     $('#are-report-button')?.addEventListener('click', () => this.recordAreReport());
     $('#pause-export-reports')?.addEventListener('click', () => this.exportAreReportsToFile());
+    $('#btn-stats')?.addEventListener('click', () => this.openStatsDialog());
+    $('#stats-close')?.addEventListener('click', () => $('#stats-dialog')?.close());
+    $('#stats-clear')?.addEventListener('click', () => {
+      if (!window.confirm('蓄積した成績をすべて削除します。よろしいですか?')) return;
+      clearGameRecords();
+      this.renderStatsBody();
+    });
     $('#pause-save')?.addEventListener('click', () => { void this.saveCurrentSession(); });
     $('#pause-save-title')?.addEventListener('click', () => {
       void (async () => {
@@ -884,6 +893,63 @@ class UI {
     $('#pause-save-status').textContent = '';
   }
 
+  // --- 成績・分析画面 (データ蓄積はstats-store.js。見た目の仕上げはCodex担当予定) ---
+  openStatsDialog() {
+    const dialog = $('#stats-dialog');
+    if (!dialog || dialog.open) return;
+    this.renderStatsBody();
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+
+  renderStatsBody() {
+    const body = $('#stats-body');
+    if (!body) return;
+    const records = loadGameRecords();
+    const summary = summarizeStats(records);
+    const pct = value => value === null ? '—' : `${(value * 100).toFixed(1)}%`;
+    if (summary.games === 0) {
+      body.innerHTML = '<p class="stats-empty">まだ成績がありません。半荘を最後まで打つと自動で記録されます。</p>';
+      return;
+    }
+    const rankBars = summary.rankCounts.map((count, index) =>
+      `<div class="stats-rank-row"><span class="lbl">${index + 1}位</span>` +
+      `<div class="stats-bar"><i style="width:${summary.games ? (count / summary.games * 100).toFixed(1) : 0}%"></i></div>` +
+      `<span class="cnt">${count}回</span></div>`).join('');
+    const yakuRows = summary.yakuRanking.slice(0, 12).map(item =>
+      `<tr><td>${item.name}</td><td class="cnt">${item.count}回</td></tr>`).join('');
+    body.innerHTML = `
+      <section class="stats-section"><h3>総合</h3>
+        <dl class="stats-grid">
+          <div><dt>対局数</dt><dd>${summary.games}半荘</dd></div>
+          <div><dt>平均順位</dt><dd>${summary.avgRank === null ? '—' : summary.avgRank.toFixed(2)}位</dd></div>
+          <div><dt>通算スコア</dt><dd>${summary.totalFinalScore >= 0 ? '+' : ''}${summary.totalFinalScore}</dd></div>
+          <div><dt>直近10戦の着順</dt><dd>${summary.recentRanks.join('→') || '—'}</dd></div>
+        </dl>
+        <div class="stats-ranks">${rankBars}</div>
+      </section>
+      <section class="stats-section"><h3>攻撃</h3>
+        <dl class="stats-grid">
+          <div><dt>和了率</dt><dd>${pct(summary.winRate)}</dd></div>
+          <div><dt>平均和了点</dt><dd>${summary.avgWinPoints === null ? '—' : `${Math.round(summary.avgWinPoints)}点`}</dd></div>
+          <div><dt>ツモ和了の割合</dt><dd>${pct(summary.tsumoShare)}</dd></div>
+          <div><dt>最高打点</dt><dd>${summary.maxWin > 0 ? `${summary.maxWin}点` : '—'}</dd></div>
+          <div><dt>リーチ率</dt><dd>${pct(summary.riichiRate)}</dd></div>
+          <div><dt>副露率</dt><dd>${pct(summary.callRate)}</dd></div>
+        </dl>
+      </section>
+      <section class="stats-section"><h3>守備</h3>
+        <dl class="stats-grid">
+          <div><dt>放銃率</dt><dd>${pct(summary.dealInRate)}</dd></div>
+          <div><dt>平均放銃点</dt><dd>${summary.avgDealInPoints === null ? '—' : `${Math.round(summary.avgDealInPoints)}点`}</dd></div>
+          <div><dt>流局時テンパイ率</dt><dd>${pct(summary.ryukyokuTenpaiRate)}</dd></div>
+        </dl>
+      </section>
+      <section class="stats-section"><h3>役の出現</h3>
+        ${yakuRows ? `<table class="stats-yaku"><tbody>${yakuRows}</tbody></table>` : '<p class="stats-empty">まだ和了がありません。</p>'}
+      </section>`;
+  }
+
   // --- 「あれ?」レポート (テスターの違和感をワンタップでカルテ用に記録) ---
   maybeShowAreReportHint() {
     if (this.areHintShown) return;
@@ -1077,6 +1143,9 @@ class UI {
     this.stopCurrentGame('replace');
     const rules = session ? makeRules(session.rules) : loadRules();
     this.spectate = location.search.includes('spectate'); // 開発用: 全員COMの観戦モード
+    // 成績は人間として打つ新規対局のみ蓄積(観戦・途中再開の重複開始は除外)
+    if (!this.spectate && !session) this.stats.startGame();
+    else this.stats.reset();
     this.human = new HumanActor(this);
     const seat0 = this.spectate ? new PacedCom('COM', 'analyst', this) : this.human;
     const dealerCeremony = session ? null : createDealerCeremony();
@@ -1510,6 +1579,7 @@ class UI {
         this.syncWaitHint();
         return;
       case 'roundStart':
+        this.stats.startHand();
         this.lastDiscardPlayer = -1;
         this.lastDiscardRef = null;
         this.tabletopDrawnSeat = null;
@@ -1523,6 +1593,7 @@ class UI {
         return this.showSplash(data);
       case 'discard':
         void this.audio.playSfx('tile-discard');
+        if (data.riichi && data.player === 0) this.stats.onMyRiichi();
         this.lastDiscardPlayer = data.player;
         this.tabletopDrawnSeat = null;
         this.tabletopKakanPreview = null;
@@ -1549,6 +1620,7 @@ class UI {
         }
         return;
       case 'claim':
+        if (data.player === 0) this.stats.onMyCall();
         // 発声→間→卓に反映、の順で「何が起きたか」を見せる
         return (async () => {
           await this.showCallout(data.player, { pon: 'ポン', chi: 'チー', minkan: 'カン' }[data.action] || data.action, 1000);
@@ -1605,8 +1677,12 @@ class UI {
           return this.pauseAwareDelay(350);
         }
         return;
-      case 'win': return this.showWin(data);
-      case 'ryukyoku': return this.showRyukyoku(data);
+      case 'win':
+        this.stats.onWin(data);
+        return this.showWin(data);
+      case 'ryukyoku':
+        this.stats.onRyukyoku(data);
+        return this.showRyukyoku(data);
       case 'nagashi': return this.showNagashi(data);
       case 'gameEnd': return this.showGameEnd(data);
     }
@@ -2610,6 +2686,14 @@ class UI {
 
   async showGameEnd(data) {
     const rules = this.game?.rules ?? loadRules();
+    {
+      // 成績蓄積: 自分の最終スコア(千点単位の浮き沈み)込みで半荘を確定
+      const myRankIndex = data.ranking.indexOf(0);
+      const uma = (rules.uma?.[myRankIndex] ?? 0) * 1000;
+      const oka = myRankIndex === 0 ? (rules.returnPoints - rules.startPoints) * 4 : 0;
+      const finalScore = Math.round((data.points[0] - rules.returnPoints + uma + oka) / 1000);
+      this.stats.finishGame({ ranking: data.ranking, points: data.points, finalScore });
+    }
     let html = `<h2>終局</h2>`;
     data.ranking.forEach((p, rank) => {
       const uma = rules.uma[rank] * 1000;

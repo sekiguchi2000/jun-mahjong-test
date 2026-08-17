@@ -17,6 +17,7 @@
 <link rel="stylesheet" href="css/product-ui-v16.css?v=1">
 <link rel="stylesheet" href="css/product-ui-v17.css?v=1">
 <link rel="stylesheet" href="css/are-report-v1.css?v=3">
+<link rel="stylesheet" href="css/stats-v1.css?v=1">
 <link rel="stylesheet" href="css/win-cinematic-v1.css?v=4">
 <link rel="stylesheet" href="css/tile-3d-v1.css?v=1">
 <link rel="stylesheet" href="css/riichi-stick-v1.css?v=1">
@@ -89,6 +90,7 @@
             </label>
           </fieldset>
           <button id="btn-rules" class="btn big">ルール設定</button>
+          <button id="btn-stats" class="btn big">成績・分析</button>
         </div>
       </details>
       <p id="title-session-status" class="session-status" role="status" aria-live="polite"></p>
@@ -307,6 +309,19 @@
   </section>
 </dialog>
 
+<dialog id="stats-dialog" aria-labelledby="stats-title">
+  <section class="stats-shell">
+    <header class="stats-header">
+      <div><small>RECORDS</small><h2 id="stats-title">成績・分析</h2></div>
+      <button id="stats-close" class="btn" type="button">閉じる</button>
+    </header>
+    <div id="stats-body" class="stats-body"></div>
+    <footer class="stats-footer">
+      <button id="stats-clear" class="btn" type="button">成績をリセット</button>
+    </footer>
+  </section>
+</dialog>
+
 <dialog id="pause-dialog" aria-labelledby="pause-title" data-gamepad-scope="pause">
   <section class="pause-shell">
     <header class="pause-header">
@@ -381,7 +396,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=47"></script>
+<script type="module" src="js/ui/main.js?v=48"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>
