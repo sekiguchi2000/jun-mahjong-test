@@ -2458,6 +2458,38 @@ class UI {
     return { target, targetType, effect };
   }
 
+  // リザルトの役・点数を一段ずつ「バン!」と見せる。タップで即スキップ。
+  async playWinReveal() {
+    const overlay = $('#overlay');
+    if (!overlay) return;
+    const steps = [...overlay.querySelectorAll('.reveal-step')];
+    if (steps.length === 0) return;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    for (const step of steps) step.classList.add('reveal-pending');
+    let skipped = reducedMotion;
+    const skip = () => { skipped = true; };
+    overlay.addEventListener('pointerdown', skip, { once: true });
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    for (const step of steps) {
+      if (!skipped) {
+        const beat = step.classList.contains('reveal-slam') ? 620
+          : step.classList.contains('reveal-pop') ? 480
+          : 180;
+        await wait(beat);
+      }
+      if (skipped) {
+        for (const rest of steps) {
+          rest.classList.remove('reveal-pending');
+          rest.classList.add('reveal-instant');
+        }
+        break;
+      }
+      step.classList.remove('reveal-pending');
+      step.classList.add('reveal-shown');
+    }
+    overlay.removeEventListener('pointerdown', skip);
+  }
+
   async showWinSuspense(data) {
     const screen = $('#screen-game');
     if (!screen) return;
@@ -2492,15 +2524,25 @@ class UI {
     html += `<div class="win-hand" id="win-hand-box"></div>`;
     html += `<div class="dora-line" id="dora-line-box"></div>`;
     for (const y of score.yaku) {
-      html += `<div class="yaku-line"><span>${y.name}</span><span class="han">${y.yakuman ? (y.yakuman >= 2 ? 'ダブル役満' : '役満') : y.han + '翻'}</span></div>`;
+      html += `<div class="yaku-line reveal-step reveal-pop"><span>${y.name}</span><span class="han">${y.yakuman ? (y.yakuman >= 2 ? 'ダブル役満' : '役満') : y.han + '翻'}</span></div>`;
     }
-    if (score.limitName) html += `<div class="limit-name">${score.limitName}</div>`;
-    html += `<div class="score-total">${score.total}点</div>`;
-    if (!score.yakumanCount) html += `<div class="fu-han">${score.fu}符 ${score.han}翻</div>`;
-    html += this.transferHtml(data.state.points, deltas);
-    html += `<button class="btn primary big" id="btn-next">次へ</button>`;
+    if (score.limitName) html += `<div class="limit-name reveal-step reveal-slam">${score.limitName}</div>`;
+    // 点数は「手の点 → 本場 → 供託 → 合計」を一段ずつ見せる
+    const hasBonus = (score.honbaBonus || 0) > 0 || (score.stickBonus || 0) > 0;
+    if (hasBonus && Number.isFinite(score.handTotal)) {
+      html += `<div class="score-breakdown reveal-step reveal-pop">${score.handTotal}点</div>`;
+      if (score.honbaBonus > 0) html += `<div class="score-breakdown reveal-step reveal-pop">本場 +${score.honbaBonus}点</div>`;
+      if (score.stickBonus > 0) html += `<div class="score-breakdown reveal-step reveal-pop">供託 +${score.stickBonus}点</div>`;
+      html += `<div class="score-total reveal-step reveal-slam">合計 ${score.total}点</div>`;
+    } else {
+      html += `<div class="score-total reveal-step reveal-slam">${score.total}点</div>`;
+    }
+    if (!score.yakumanCount) html += `<div class="fu-han reveal-step">${score.fu}符 ${score.han}翻</div>`;
+    html += `<div class="reveal-step">${this.transferHtml(data.state.points, deltas)}</div>`;
+    html += `<button class="btn primary big reveal-step" id="btn-next">次へ</button>`;
 
     const done = this.showOverlayAwait(html);
+    void this.playWinReveal();
     // 手牌+和了牌
     const handBox = $('#win-hand-box');
     const tiles = [...data.hand].sort((a, b) => a.kind - b.kind);

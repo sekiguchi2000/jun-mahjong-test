@@ -40,10 +40,16 @@ export function scoreWin(ctx, rules, extra) {
   const base = basePoints(result.han, result.fu, result.yakumanCount, rules);
   const pay = payment(base, extra.isDealer, ctx.tsumo, extra.honba);
   const name = limitName(result.han, result.fu, result.yakumanCount, base, rules);
+  // リザルト演出用の内訳: 手の点(本場抜き)・本場加算・供託回収
+  const honbaBonus = (extra.honba || 0) * 300;
+  const stickBonus = (extra.riichiSticks || 0) * 1000;
   return {
     ...result,
     base,
-    total: pay.total + (extra.riichiSticks || 0) * 1000,
+    total: pay.total + stickBonus,
+    handTotal: pay.total - honbaBonus,
+    honbaBonus,
+    stickBonus,
     payments: pay.payments,
     limitName: name,
   };

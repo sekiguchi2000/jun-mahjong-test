@@ -206,3 +206,28 @@
   .win-cinematic-frame { opacity: .46 !important; }
   .win-cinematic-strike-tile { transform: translate(-50%, -50%) !important; }
 }
+
+/* ---------- リザルトの段階リビール (v12.8) ---------- */
+.reveal-step.reveal-pending { opacity: 0; transform: translateY(12px) scale(0.9); }
+.reveal-step.reveal-shown {
+  animation: reveal-ban 0.34s cubic-bezier(0.18, 1.35, 0.4, 1) both;
+}
+.reveal-step.reveal-slam.reveal-shown {
+  animation: reveal-slam 0.5s cubic-bezier(0.16, 1.4, 0.3, 1) both;
+}
+.reveal-step.reveal-instant { opacity: 1; transform: none; animation: none; }
+@keyframes reveal-ban {
+  0% { opacity: 0; transform: translateY(14px) scale(0.72); }
+  62% { opacity: 1; transform: translateY(-2px) scale(1.12); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes reveal-slam {
+  0% { opacity: 0; transform: translateY(20px) scale(2.1); }
+  55% { opacity: 1; transform: translateY(0) scale(0.94); }
+  75% { transform: scale(1.06); }
+  100% { opacity: 1; transform: none; }
+}
+.score-breakdown { font-size: 1.05rem; color: #e8dcae; margin: 2px 0; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-step.reveal-shown, .reveal-step.reveal-slam.reveal-shown { animation: none; opacity: 1; transform: none; }
+}
