@@ -574,10 +574,30 @@ class UI {
     const selectedId = analysis?.selected?.candidateId;
     const selected = (analysis?.candidates ?? []).find(candidate => candidate.candidateId === selectedId);
     if (!selected || selected.action?.action !== 'discard') return [];
-    const alternatives = (analysis?.candidates ?? [])
-      .filter(candidate => candidate.action?.action === 'discard')
-      .slice(0, 14);
+    // 有効な候補だけを比較に載せる: 提案 + 同向聴で受け入れが拮抗する牌(差2枚以内)。
+    // 向聴が悪化する牌・大差で劣る牌・同一牌の重複は省く。
     const handAll = view?.drawn ? [...(view.hand ?? []), view.drawn] : [...(view?.hand ?? [])];
+    const seenTiles = new Set();
+    const alternatives = [];
+    const sortedCandidates = (analysis?.candidates ?? [])
+      .filter(candidate => candidate.action?.action === 'discard')
+      .sort((left, right) => (right === selected) - (left === selected) ||
+        (right.metrics?.ukeirePhysical ?? -1) - (left.metrics?.ukeirePhysical ?? -1));
+    for (const candidate of sortedCandidates) {
+      const tile = Number.isInteger(candidate.action?.index) ? handAll[candidate.action.index] : null;
+      const key = tile ? `${tile.kind}:${tile.red ? 1 : 0}` : candidate.candidateId;
+      if (seenTiles.has(key)) continue;
+      if (candidate !== selected) {
+        const metrics = candidate.metrics ?? {};
+        if (metrics.shanten !== selected.metrics?.shanten) continue;
+        if (Number.isFinite(metrics.ukeirePhysical) &&
+            Number.isFinite(selected.metrics?.ukeirePhysical) &&
+            selected.metrics.ukeirePhysical - metrics.ukeirePhysical > 2) continue;
+      }
+      seenTiles.add(key);
+      alternatives.push(candidate);
+      if (alternatives.length >= 6) break;
+    }
     const nameOf = action => {
       const tile = Number.isInteger(action?.index) ? handAll[action.index] : null;
       return tile ? tileName(tile.kind, tile.red) : 'この牌';
