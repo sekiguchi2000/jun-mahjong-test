@@ -1542,6 +1542,11 @@ class UI {
           await this.showRiichiStick(data.player);
           return this.showCallout(data.player, 'リーチ');
         }
+        // リーチ済みの打ち手はツモ切り強制で思考時間が無いため、
+        // 捨て牌を目で追えるようにここで一拍置く(qa-fast時は省略)
+        if (data.state?.players?.[data.player]?.riichi && !location.search.includes('qa-fast')) {
+          await this.pauseAwareDelay(550);
+        }
         return;
       case 'claim':
         // 発声→間→卓に反映、の順で「何が起きたか」を見せる
@@ -1595,6 +1600,10 @@ class UI {
         }
         this.setTurnIndicator(data.player);
         $('#center .sub .rest') && ($('#center .sub .rest').textContent = `残 ${data.remaining}`);
+        // リーチ済みはツモ切り強制で即打牌になるため、ツモの瞬間にも一拍置く
+        if (data.state?.players?.[data.player]?.riichi && !location.search.includes('qa-fast')) {
+          return this.pauseAwareDelay(350);
+        }
         return;
       case 'win': return this.showWin(data);
       case 'ryukyoku': return this.showRyukyoku(data);
