@@ -30,7 +30,7 @@ import {
   writeLearningModePreferences,
 } from '../platform/desktop-settings.js?v=17';
 import { presentReviewDecision, presentThought } from './decision-presenter.js?v=17';
-import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.js?v=4';
+import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.js?v=5';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';

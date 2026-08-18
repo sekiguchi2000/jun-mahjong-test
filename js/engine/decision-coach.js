@@ -256,6 +256,8 @@ function blockGrowthSentence(view, action, selectedMetrics) {
       parts.push(`${tileName(low)}${tileName(high)}（${waits.map(kind => tileName(kind)).join('か')}で完成）`);
     } else if (block.type === 'kanchan') {
       parts.push(`${tileName(block.kinds[0])}${tileName(block.kinds[1])}（${tileName(block.kinds[0] + 1)}で完成）`);
+    } else if (block.type === 'ryankan') {
+      parts.push(`${block.kinds.map(kind => tileName(kind)).join('')}（${tileName(block.kinds[0] + 1)}か${tileName(block.kinds[1] + 1)}で完成）`);
     }
   }
   const unique = [...new Set(parts)];

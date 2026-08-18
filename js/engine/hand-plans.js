@@ -166,13 +166,14 @@ export function decomposeBlocks(handAll, context = {}) {
       blocks.push({ type: 'run', kinds: [kind, kind + 1, kind + 2], quality: 1.0 });
     }
   }
-  // 両面・辺張(隣接ターツ)
+  // 両面(端を含まない隣接ターツ)。辺張は最後に回す:
+  // 1-2-4のような形では1-2ペンチャンを先に取ると2-4嵌張(5引きで両面へ育つ)を殺すため
   for (let kind = 0; kind < KIND_COUNT - 1; kind++) {
     if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 1)) continue;
+    if (numOf(kind) === 1 || numOf(kind + 1) === 9) continue;
     while (work[kind] >= 1 && work[kind + 1] >= 1) {
       work[kind]--; work[kind + 1]--;
-      const edge = numOf(kind) === 1 || numOf(kind + 1) === 9;
-      blocks.push({ type: 'taatsu', kinds: [kind, kind + 1], quality: edge ? 0.7 : 0.9 });
+      blocks.push({ type: 'taatsu', kinds: [kind, kind + 1], quality: 0.9 });
     }
   }
   // 対子(1組目=雀頭候補0.8、2組目以降0.5、役の無い字牌対子0.35)。
@@ -188,12 +189,29 @@ export function decomposeBlocks(handAll, context = {}) {
       blocks.push({ type: 'pair', kinds: [kind, kind], quality });
     }
   }
+  // リャンカン(x, x+2, x+4): 嵌張2つ分の受け(両方の間の牌)を持つ一つの形として扱う
+  for (let kind = 0; kind < KIND_COUNT - 4; kind++) {
+    if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 4)) continue;
+    while (work[kind] >= 1 && work[kind + 2] >= 1 && work[kind + 4] >= 1) {
+      work[kind]--; work[kind + 2]--; work[kind + 4]--;
+      blocks.push({ type: 'ryankan', kinds: [kind, kind + 2, kind + 4], quality: 0.85 });
+    }
+  }
   // 嵌張
   for (let kind = 0; kind < KIND_COUNT - 2; kind++) {
     if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 2)) continue;
     while (work[kind] >= 1 && work[kind + 2] >= 1) {
       work[kind]--; work[kind + 2]--;
       blocks.push({ type: 'kanchan', kinds: [kind, kind + 2], quality: 0.7 });
+    }
+  }
+  // 辺張(1-2 / 8-9)。行き止まり形なので品質は最低ランク
+  for (let kind = 0; kind < KIND_COUNT - 1; kind++) {
+    if (isHonor(kind) || suitIndex(kind) !== suitIndex(kind + 1)) continue;
+    if (numOf(kind) !== 1 && numOf(kind + 1) !== 9) continue;
+    while (work[kind] >= 1 && work[kind + 1] >= 1) {
+      work[kind]--; work[kind + 1]--;
+      blocks.push({ type: 'taatsu', kinds: [kind, kind + 1], quality: 0.55 });
     }
   }
 
