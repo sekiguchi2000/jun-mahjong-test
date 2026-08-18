@@ -266,6 +266,18 @@ function assessAgainstThreat(kind, threat, visible) {
   const noChance = aliveShapes.length === 0;
   const oneChanceShape = oneChance ? aliveShapes[0] : null;
   const oneChanceRoutes = aliveRoutes.filter(route => route.oneChance).length;
+  // 壁読みの用語(一般用法)は「両面待ちに対しては」と限定して使う(2026-08-19仕様)。
+  // 両面ワンチャンス=生きた両面ルート全てで必要牌が残り1枚。両面ノーチャンス=
+  // 両面ルートが壁(4枚見え)で全滅。スジで消えただけの場合はスジの文が担当する。
+  const ryanmenRoutes = sequenceRoutes.filter(route => route.shape === 'RYANMEN');
+  const aliveRyanmen = ryanmenRoutes.filter(route => route.possible);
+  const ryanmenOneChance = aliveRyanmen.length > 0 && aliveRyanmen.every(route => route.oneChance);
+  const ryanmenOneChanceWallKinds = ryanmenOneChance
+    ? [...new Set(aliveRyanmen.flatMap(route =>
+        route.companions.filter((companion, i) => route.companionRemaining[i] === 1)))]
+    : [];
+  const ryanmenNoChance = ryanmenRoutes.length > 0 && aliveRyanmen.length === 0 &&
+    ryanmenRoutes.some(route => route.eliminatedByNoChance);
   const noChanceRoutes = sequenceRoutes.filter(route => route.eliminatedByNoChance).length;
   const routeRisk = sequenceRoutes.reduce((sum, route) => sum + routeWeight(route), 0);
   const residualRisk = residualWaits.reduce((sum, wait) =>
@@ -288,6 +300,9 @@ function assessAgainstThreat(kind, threat, visible) {
     oneChance,
     oneChanceShape,
     oneChanceRoutes,
+    ryanmenOneChance,
+    ryanmenOneChanceWallKinds,
+    ryanmenNoChance,
     noChance,
     noChanceRoutes,
     sequenceRoutes,

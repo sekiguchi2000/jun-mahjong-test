@@ -235,8 +235,10 @@ function safetyText(metrics) {
       const detail = details.find(entry => entry?.seat === item.seat);
       const evidence = ['現物ではありません'];
       if (detail?.suji) evidence.push('両面筋で消える待ち筋があります');
-      if (detail?.oneChance) evidence.push('当たり方が残り一形だけです(ワンチャンス)');
-      if (detail?.noChance) evidence.push('当たれる形がありません(ノーチャンス)');
+      if (detail?.oneChance) evidence.push('当たり方が残り一形だけで、可能性は非常に低いです');
+      if (detail?.noChance) evidence.push('当たれる形がなく、実質の安全牌です');
+      if (detail?.ryanmenNoChance) evidence.push('両面待ちに対しては、ノーチャンスです');
+      else if (detail?.ryanmenOneChance) evidence.push('両面待ちに対しては、ワンチャンスです');
       if (detail?.residualWaits?.length > 0) evidence.push('単騎・双碰などは残ります');
       return `${item.seat + 1}番席には${evidence.join('。')}`;
     });

@@ -84,7 +84,7 @@ function safetySentence(metrics) {
   if (safety.noChance && safety.residualWaits?.length) {
     return '周りの牌が4枚見えて消えている形はありますが、別の待ち方は残ります。';
   }
-  if (safety.oneChance) return '見えている牌から数えると、当たり方が一形しか残っていません(ワンチャンス)。ただし安全牌ではありません。';
+  if (safety.oneChance) return '見えている牌から数えると当たり方が一形しか残っておらず、当たる可能性は非常に低いです。ただし完全な安全牌ではありません。';
   return '現物ではありません。公開情報から比べた相対的な危険度だけを見ています。';
 }
 
@@ -171,7 +171,7 @@ function safetyReasonSentences(view, metrics, selectedTile) {
       continue;
     }
     if (detail.noChance) {
-      sentences.push(`${name}は、見えている牌から数えると当たれる形が一つも作れません(ノーチャンス)。実質的な安全牌です。`);
+      sentences.push(`${name}は、見えている牌から数えると当たれる形が一つも作れないので、実質の安全牌です。`);
       continue;
     }
     const routes = detail.sequenceRoutes ?? [];
@@ -189,15 +189,21 @@ function safetyReasonSentences(view, metrics, selectedTile) {
     if (wallKinds.length > 0) {
       reasons.push(`${wallKinds.join('・')}が4枚見えていて、それを使う待ちの形は作れません`);
     }
+    // 壁読みの用語は「両面待ちに対しては」と必ず限定する(初級者が勘違いしやすいため)
+    if (detail.ryanmenNoChance) {
+      reasons.push('両面待ちに対しては、ノーチャンスです');
+    } else if (detail.ryanmenOneChance && (detail.ryanmenOneChanceWallKinds?.length ?? 0) > 0) {
+      const walls = detail.ryanmenOneChanceWallKinds.map(kind => tileName(kind)).join('・');
+      reasons.push(`${walls}が3枚見えていて、両面待ちに対しては、ワンチャンスです`);
+    }
     if (routes.length === 0 && !detail.oneChance) {
       const waits = detail.residualWaits ?? [];
       const waitText = waits.includes('SHANPON') ? 'シャンポンか単騎' : '単騎';
       reasons.push(`字牌なので順子の待ちでは当たらず、残る可能性は${waitText}だけです`);
     }
     if (detail.oneChance && detail.oneChanceShape) {
-      // ワンチャンス=当たり形の数え上げで残り1形だけ(ユーザー定義)。
-      // スジ・壁の証拠に続けて、残った一形を名指しして結論を言う。
-      reasons.push(`見えている牌から数えると、当たり方は${waitShapeName(detail.oneChanceShape)}の一形しか残っていません(ワンチャンス)`);
+      // 当たり形の数え上げで残り1形だけ: その一形を名指しして結論を言う
+      reasons.push(`見えている牌から数えると当たり方は${waitShapeName(detail.oneChanceShape)}しか残っておらず、そこで待っている可能性は非常に低いです`);
     }
     if (detail.urasujiOfDeclaration) {
       reasons.push('ただし宣言牌の裏筋にあたるので、警戒は少し残します');
