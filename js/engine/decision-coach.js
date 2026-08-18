@@ -331,6 +331,96 @@ function planAlternativeParts(view, analysis) {
   return parts;
 }
 
+function suitNameOf(suit) {
+  return ['萬子', '筒子', '索子'][suit] ?? '';
+}
+
+function tileSuitOf(kind) {
+  return kind >= 0 && kind < 27 ? Math.floor(kind / 9) : null;
+}
+
+// 読み分岐 (2026-08-19仕様): 読みは確率と違い打つ人の判断に委ねられる。
+// 「この読みを重く見るならこれ」「受け入れだけならこれ」を併記し、
+// 最後の一枚の選択はガイドの情報を見たユーザー自身がした、という形にする。
+function readBranchParts(view, analysis) {
+  const action = analysis?.selected?.action;
+  if (action?.action !== 'discard' || view?.riichi) return [];
+  const selected = selectedCandidate(analysis);
+  const selectedTile = candidateTile(view, selected);
+  const selectedMetrics = selected?.metrics;
+  if (!selectedTile || !Number.isInteger(selectedMetrics?.shanten)) return [];
+  const discards = (analysis?.candidates ?? []).filter(candidate =>
+    candidate?.action?.action === 'discard' && !candidate.action.riichi &&
+    Number.isInteger(candidate.metrics?.shanten) && candidateTile(view, candidate));
+  const flushSignals = (analysis?.estimates ?? []).filter(item => item.code === 'OPPONENT_FLUSH_SIGNAL');
+  const pressureSignals = (analysis?.estimates ?? []).filter(item => item.code === 'OPPONENT_TENPAI_PRESSURE');
+  const anyRiichi = (view?.public?.players ?? []).some((player, seat) => seat !== view.me && player?.riichi);
+  const parts = [];
+  // 受け入れ未計算(向聴が落ちる側)の候補は、手放して一番惜しくない牌を分岐に選ぶ
+  const planContext = coachPlanContext(view);
+  const handAll = handAllOf(view);
+  const plans = evaluateHandPlans(handAll, view?.melds ?? [], planContext);
+  const retentionOf = tile => tileRetentionValue(tile, plans, handAll, planContext).retention;
+  const pickBest = (pool, shanten) => pool
+    .filter(candidate => candidate.metrics.shanten === shanten)
+    .sort((left, right) =>
+      ((right.metrics.ukeirePhysical ?? -1) - (left.metrics.ukeirePhysical ?? -1)) ||
+      (retentionOf(candidateTile(view, left)) - retentionOf(candidateTile(view, right))))[0];
+
+  // ①確率(受け入れ)側の対案: 読みや警戒で最大受け入れを選ばなかったとき
+  if (flushSignals.length > 0 || pressureSignals.length > 0 || anyRiichi) {
+    const best = [...discards].sort((left, right) =>
+      (left.metrics.shanten - right.metrics.shanten) ||
+      ((right.metrics.ukeirePhysical ?? 0) - (left.metrics.ukeirePhysical ?? 0)))[0];
+    const bestTile = best ? candidateTile(view, best) : null;
+    if (bestTile && (bestTile.kind !== selectedTile.kind || bestTile.red !== selectedTile.red) &&
+        (best.metrics.shanten < selectedMetrics.shanten ||
+         (best.metrics.shanten === selectedMetrics.shanten &&
+          (best.metrics.ukeirePhysical ?? 0) > (selectedMetrics.ukeirePhysical ?? 0)))) {
+      parts.push(`受け入れの枚数だけで選ぶなら、${tileName(bestTile.kind, bestTile.red)}切り（${best.metrics.ukeirePhysical}枚）が最大です。`);
+    }
+  }
+
+  // ②染め気配: 読みを重く見る側の対案(推奨が既にその色を避けているときは不要)
+  for (const signal of flushSignals.slice(0, 2)) {
+    if (tileSuitOf(selectedTile.kind) !== signal.suit) continue;
+    const label = relativeSeatLabel(view, signal.seat);
+    if (!label) continue;
+    const offSuit = discards.filter(candidate =>
+      tileSuitOf(candidateTile(view, candidate).kind) !== signal.suit);
+    const sameSpeed = pickBest(offSuit, selectedMetrics.shanten);
+    const alternative = sameSpeed ?? pickBest(offSuit, selectedMetrics.shanten + 1);
+    if (!alternative) continue;
+    const altTile = candidateTile(view, alternative);
+    const evidence = (signal.evidence?.sameSuitMelds ?? 0) >= 2
+      ? `${suitNameOf(signal.suit)}の副露が${signal.evidence.sameSuitMelds}つ`
+      : `河が${suitNameOf(signal.suit)}以外に偏っている`;
+    const cost = sameSpeed ? '' : '（手は一歩遅れます）';
+    parts.push(`${label}は${suitNameOf(signal.suit)}の染め気配です（${evidence}）。リーチはありませんが、この読みを重く見るなら、振り込みのリスク回避と、${suitNameOf(signal.suit)}を鳴かせて進めさせない意味も含めて、${tileName(altTile.kind, altTile.red)}を切る選択もあります${cost}。`);
+  }
+
+  // ③テンパイ気配(染め以外): 通った実績側へ回す対案
+  const flushSeats = new Set(flushSignals.map(signal => signal.seat));
+  for (const signal of pressureSignals.filter(item => !flushSeats.has(item.seat)).slice(0, 1)) {
+    if (signal.genbutsuKinds?.includes(selectedTile.kind)) continue;
+    const label = relativeSeatLabel(view, signal.seat);
+    if (!label) continue;
+    const safe = discards.filter(candidate =>
+      signal.genbutsuKinds?.includes(candidateTile(view, candidate).kind));
+    const sameSpeed = pickBest(safe, selectedMetrics.shanten);
+    const alternative = sameSpeed ?? pickBest(safe, selectedMetrics.shanten + 1);
+    if (!alternative) continue;
+    const altTile = candidateTile(view, alternative);
+    const cost = sameSpeed ? '' : '（手は一歩遅れます）';
+    parts.push(`${label}のテンパイ気配を重く見るなら、${label}に通った実績のある${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
+  }
+
+  if (parts.length > 0) {
+    parts.push('どの読みをどれだけ重く見るかで最善は変わります。最後の一枚は、ここまでの情報とあなたの読みで選んでください。');
+  }
+  return parts.slice(0, 4);
+}
+
 function planHeadlineSentences(selected) {
   const planEvaluation = selected?.metrics?.planEvaluation;
   const top = planEvaluation?.topPlans?.[0]?.code;
@@ -522,8 +612,9 @@ function turnExplanationParts(view, analysis) {
   // 狙い(伸ばす形)→選んだ理由→受け入れ→意味のある同格比較→別プランへの分岐→状況、の順で読ませる
   const growth = action?.action === 'discard' ? blockGrowthSentence(view, action, metrics) : '';
   const alternatives = action?.action === 'discard' ? planAlternativeParts(view, analysis) : [];
+  const readBranches = action?.action === 'discard' ? readBranchParts(view, analysis) : [];
   const tail = context ? [`判断時点は${phaseLabel(phaseFact?.value)}、${context}です。`] : [];
-  return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...tail];
+  return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...readBranches, ...tail];
 }
 
 function shantenLabel(shanten) {
