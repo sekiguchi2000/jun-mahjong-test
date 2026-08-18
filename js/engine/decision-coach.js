@@ -399,20 +399,60 @@ function readBranchParts(view, analysis) {
     parts.push(`${label}は${suitNameOf(signal.suit)}の染め気配です（${evidence}）。リーチはありませんが、この読みを重く見るなら、振り込みのリスク回避と、${suitNameOf(signal.suit)}を鳴かせて進めさせない意味も含めて、${tileName(altTile.kind, altTile.red)}を切る選択もあります${cost}。`);
   }
 
-  // ③テンパイ気配(染め以外): 通った実績側へ回す対案
+  // ③リーチへの回し先: リーチ相手がいるとき「回すならこの牌」はリーチへの
+  // 安全度を最優先で選ぶ(気配相手の通過実績だけで選ぶとリーチに危険な牌を
+  // 回し先として勧めてしまう=2026-08-19実機指摘)
+  const riichiSeats = (view?.public?.players ?? [])
+    .map((player, seat) => ({ player, seat }))
+    .filter(({ player, seat }) => seat !== view.me && player?.riichi);
+  if (riichiSeats.length > 0) {
+    const riskOf = candidate => {
+      const risk = candidate?.metrics?.safety?.maxRisk;
+      return Number.isFinite(risk) ? risk : Number.POSITIVE_INFINITY;
+    };
+    const pickSafest = shanten => discards
+      .filter(candidate => candidate.metrics.shanten === shanten)
+      .sort((left, right) => (riskOf(left) - riskOf(right)) ||
+        ((right.metrics.ukeirePhysical ?? -1) - (left.metrics.ukeirePhysical ?? -1)) ||
+        (retentionOf(candidateTile(view, left)) - retentionOf(candidateTile(view, right))))[0];
+    const bestSame = pickSafest(selectedMetrics.shanten);
+    const bestSlower = pickSafest(selectedMetrics.shanten + 1);
+    // 一歩遅らせる方が明確に安全なら、そちらを回し先として名指しする
+    const useSlower = bestSlower && riskOf(bestSlower) < riskOf(bestSame);
+    const alternative = useSlower ? bestSlower : bestSame;
+    const selectedRisk = Number.isFinite(selectedMetrics?.safety?.maxRisk)
+      ? selectedMetrics.safety.maxRisk : Number.POSITIVE_INFINITY;
+    if (alternative && riskOf(alternative) < selectedRisk) {
+      const altTile = candidateTile(view, alternative);
+      if (altTile.kind !== selectedTile.kind || altTile.red !== selectedTile.red) {
+        const safety = alternative.metrics.safety;
+        const safeDesc = (safety?.commonGenbutsu || (safety?.genbutsuCount ?? 0) >= (safety?.perThreat?.length ?? 1))
+          ? '現物の'
+          : (safety?.maxRisk === 0 ? '当たる形のない' : '一番危険の低い');
+        const labels = riichiSeats.map(({ seat }) => relativeSeatLabel(view, seat)).filter(Boolean).join('・');
+        const cost = useSlower ? '（手は一歩遅れます）' : '';
+        parts.push(`${labels || 'リーチ者'}のリーチを重く見て回す（降りる）なら、${safeDesc}${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
+      }
+    }
+  }
+
+  // ④テンパイ気配(染め以外): 通った実績側へ回す対案。
+  // リーチが場に居るときはリーチ最優先の③が回し先を言うので出さない
   const flushSeats = new Set(flushSignals.map(signal => signal.seat));
-  for (const signal of pressureSignals.filter(item => !flushSeats.has(item.seat)).slice(0, 1)) {
-    if (signal.genbutsuKinds?.includes(selectedTile.kind)) continue;
-    const label = relativeSeatLabel(view, signal.seat);
-    if (!label) continue;
-    const safe = discards.filter(candidate =>
-      signal.genbutsuKinds?.includes(candidateTile(view, candidate).kind));
-    const sameSpeed = pickBest(safe, selectedMetrics.shanten);
-    const alternative = sameSpeed ?? pickBest(safe, selectedMetrics.shanten + 1);
-    if (!alternative) continue;
-    const altTile = candidateTile(view, alternative);
-    const cost = sameSpeed ? '' : '（手は一歩遅れます）';
-    parts.push(`${label}のテンパイ気配を重く見るなら、${label}に通った実績のある${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
+  if (riichiSeats.length === 0) {
+    for (const signal of pressureSignals.filter(item => !flushSeats.has(item.seat)).slice(0, 1)) {
+      if (signal.genbutsuKinds?.includes(selectedTile.kind)) continue;
+      const label = relativeSeatLabel(view, signal.seat);
+      if (!label) continue;
+      const safe = discards.filter(candidate =>
+        signal.genbutsuKinds?.includes(candidateTile(view, candidate).kind));
+      const sameSpeed = pickBest(safe, selectedMetrics.shanten);
+      const alternative = sameSpeed ?? pickBest(safe, selectedMetrics.shanten + 1);
+      if (!alternative) continue;
+      const altTile = candidateTile(view, alternative);
+      const cost = sameSpeed ? '' : '（手は一歩遅れます）';
+      parts.push(`${label}のテンパイ気配を重く見るなら、${label}に通った実績のある${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
+    }
   }
 
   if (parts.length > 0) {
