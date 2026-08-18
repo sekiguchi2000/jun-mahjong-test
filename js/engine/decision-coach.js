@@ -426,9 +426,20 @@ function readBranchParts(view, analysis) {
       const altTile = candidateTile(view, alternative);
       if (altTile.kind !== selectedTile.kind || altTile.red !== selectedTile.red) {
         const safety = alternative.metrics.safety;
-        const safeDesc = (safety?.commonGenbutsu || (safety?.genbutsuCount ?? 0) >= (safety?.perThreat?.length ?? 1))
-          ? '現物の'
-          : (safety?.maxRisk === 0 ? '当たる形のない' : '一番危険の低い');
+        // 回し先の根拠はその牌の実データで言い分ける。現物でない牌を現物と呼ばない
+        const details = safety?.perThreatDetails ?? [];
+        const sujiSafe = detail => detail.suji &&
+          !(detail.sequenceRoutes ?? []).some(route => route.possible && route.shape === 'RYANMEN');
+        let safeDesc = '一番危険の低い';
+        if (safety?.commonGenbutsu || (details.length > 0 && details.every(detail => detail.genbutsu))) {
+          safeDesc = '現物の';
+        } else if (details.length > 0 && details.every(detail => detail.genbutsu || detail.noChance)) {
+          safeDesc = '当たる形のない';
+        } else if (details.length > 0 && details.every(detail => detail.genbutsu || sujiSafe(detail))) {
+          safeDesc = 'スジの';
+        } else if (details.length > 0 && details.every(detail => detail.genbutsu || detail.ryanmenNoChance)) {
+          safeDesc = '両面に当たらない';
+        }
         const labels = riichiSeats.map(({ seat }) => relativeSeatLabel(view, seat)).filter(Boolean).join('・');
         const cost = useSlower ? '（手は一歩遅れます）' : '';
         parts.push(`${labels || 'リーチ者'}のリーチを重く見て回す（降りる）なら、${safeDesc}${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
