@@ -254,23 +254,27 @@ function assessAgainstThreat(kind, threat, visible) {
   if (candidateRemaining >= 1) residualWaits.push('TANKI');
   if (kokushiMissingWaitPossible(kind, threat, visible)) residualWaits.push('KOKUSHI');
   const sujiEliminated = sequenceRoutes.filter(route => route.eliminatedBySuji).length;
-  // ワンチャンス=両面ルート基準。嵌張・辺張の構成牌が薄いだけでは名乗らない。
-  // 生きている両面ルートが存在し、その全てが「必要牌の残り1枚」のときだけ真。
-  const aliveRyanmen = sequenceRoutes.filter(route => route.possible && route.shape === 'RYANMEN');
-  const oneChanceRoutes = aliveRyanmen.filter(route => route.oneChance).length;
-  const oneChance = aliveRyanmen.length > 0 && aliveRyanmen.every(route => route.oneChance);
-  const oneChanceWallKinds = oneChance
-    ? [...new Set(aliveRyanmen.flatMap(route =>
-        route.companions.filter((companion, i) => route.companionRemaining[i] === 1)))]
-    : [];
+  // ワンチャンス/ノーチャンス=残る当たり形の数え上げ(ユーザー定義 2026-08-19)。
+  // 生きている順子ルート(両面/嵌張/辺張)+シャンポン/単騎/国士を全列挙し、
+  // 残り1形だけならワンチャンス、0形なら完全安牌(ノーチャンス)。
+  const aliveRoutes = sequenceRoutes.filter(route => route.possible);
+  const aliveShapes = [
+    ...aliveRoutes.map(route => ({ kind: 'SEQUENCE', shape: route.shape, companions: route.companions })),
+    ...residualWaits.map(wait => ({ kind: wait })),
+  ];
+  const oneChance = aliveShapes.length === 1;
+  const noChance = aliveShapes.length === 0;
+  const oneChanceShape = oneChance ? aliveShapes[0] : null;
+  const oneChanceRoutes = aliveRoutes.filter(route => route.oneChance).length;
   const noChanceRoutes = sequenceRoutes.filter(route => route.eliminatedByNoChance).length;
   const routeRisk = sequenceRoutes.reduce((sum, route) => sum + routeWeight(route), 0);
   const residualRisk = residualWaits.reduce((sum, wait) =>
     sum + (wait === 'SHANPON' ? 4 : (wait === 'TANKI' ? 2 : 1)), 0);
-  // 非現物は、成立形をすべて消せた場合も「現物」と同じ0へ丸めない。
-  // 未列挙の特殊形やモデル誤差を安全側に残す。
   const urasujiOfDeclaration = isDeclarationUrasuji(kind, threat.declarationKind ?? null);
-  const risk = Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0));
+  // 当たり形が1つでも残るなら床1(モデル誤差を安全側へ)。0形は牌の枚数と
+  // フリテン規則から成立し得ないので、現物と同じ0(完全安牌)。
+  const risk = noChance ? 0
+    : Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0));
   return {
     seat: threat.seat,
     genbutsu: false,
@@ -282,9 +286,9 @@ function assessAgainstThreat(kind, threat, visible) {
     suji: sujiEliminated > 0,
     sujiEliminated,
     oneChance,
+    oneChanceShape,
     oneChanceRoutes,
-    oneChanceWallKinds,
-    noChance: noChanceRoutes > 0,
+    noChance,
     noChanceRoutes,
     sequenceRoutes,
     residualWaits,

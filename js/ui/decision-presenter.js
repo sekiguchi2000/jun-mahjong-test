@@ -235,8 +235,8 @@ function safetyText(metrics) {
       const detail = details.find(entry => entry?.seat === item.seat);
       const evidence = ['現物ではありません'];
       if (detail?.suji) evidence.push('両面筋で消える待ち筋があります');
-      if (detail?.oneChance) evidence.push('ワンチャンスの形があります');
-      if (detail?.noChance) evidence.push('壁で消えた順子形があります');
+      if (detail?.oneChance) evidence.push('当たり方が残り一形だけです(ワンチャンス)');
+      if (detail?.noChance) evidence.push('当たれる形がありません(ノーチャンス)');
       if (detail?.residualWaits?.length > 0) evidence.push('単騎・双碰などは残ります');
       return `${item.seat + 1}番席には${evidence.join('。')}`;
     });

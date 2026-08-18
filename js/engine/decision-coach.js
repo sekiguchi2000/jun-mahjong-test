@@ -84,7 +84,7 @@ function safetySentence(metrics) {
   if (safety.noChance && safety.residualWaits?.length) {
     return '周りの牌が4枚見えて消えている形はありますが、別の待ち方は残ります。';
   }
-  if (safety.oneChance) return '両面待ちに必要な牌が3枚見えていて、両面は残り1通りです(ワンチャンス)。ただし安全牌ではありません。';
+  if (safety.oneChance) return '見えている牌から数えると、当たり方が一形しか残っていません(ワンチャンス)。ただし安全牌ではありません。';
   return '現物ではありません。公開情報から比べた相対的な危険度だけを見ています。';
 }
 
@@ -138,6 +138,19 @@ function planKeepPhrase(planEvaluation) {
   return null;
 }
 
+// 当たり形の呼び名(ワンチャンスで残った一形を名指しする)
+function waitShapeName(shape) {
+  if (!shape) return 'その形';
+  if (shape.kind === 'TANKI') return '単騎待ち';
+  if (shape.kind === 'SHANPON') return 'シャンポン待ち';
+  if (shape.kind === 'KOKUSHI') return '国士無双の待ち';
+  if (shape.kind === 'SEQUENCE') {
+    const label = shape.shape === 'RYANMEN' ? '両面' : shape.shape === 'KANCHAN' ? '嵌張' : '辺張';
+    return `${shape.companions.map(kind => tileName(kind)).join('')}を使った${label}待ち`;
+  }
+  return 'その形';
+}
+
 // 「〜だから当たらない/当たりにくい」: 選んだ牌の安全根拠を証拠つきで言う (v12.7)
 function safetyReasonSentences(view, metrics, selectedTile) {
   const details = metrics?.safety?.perThreatDetails;
@@ -157,6 +170,10 @@ function safetyReasonSentences(view, metrics, selectedTile) {
         : `${name}はリーチ宣言の後に場に通った牌なので、フリテンの規則で${label}には当たりません。`);
       continue;
     }
+    if (detail.noChance) {
+      sentences.push(`${name}は、見えている牌から数えると当たれる形が一つも作れません(ノーチャンス)。実質的な安全牌です。`);
+      continue;
+    }
     const routes = detail.sequenceRoutes ?? [];
     const reasons = [];
     const sujiRoutes = routes.filter(route => route.eliminatedBySuji);
@@ -172,14 +189,15 @@ function safetyReasonSentences(view, metrics, selectedTile) {
     if (wallKinds.length > 0) {
       reasons.push(`${wallKinds.join('・')}が4枚見えていて、それを使う待ちの形は作れません`);
     }
-    if (routes.length === 0) {
+    if (routes.length === 0 && !detail.oneChance) {
       const waits = detail.residualWaits ?? [];
       const waitText = waits.includes('SHANPON') ? 'シャンポンか単騎' : '単騎';
       reasons.push(`字牌なので順子の待ちでは当たらず、残る可能性は${waitText}だけです`);
-    } else if (reasons.length === 0 && detail.oneChance && (detail.oneChanceWallKinds?.length ?? 0) > 0) {
-      // ワンチャンス=両面基準。生きた両面ルート全てで必要牌が残り1枚のときだけ言う。
-      const walls = detail.oneChanceWallKinds.map(kind => tileName(kind)).join('・');
-      reasons.push(`${walls}が3枚見えていて、それを使う両面待ちは残り1通りしかありません(ワンチャンス)。嵌張やシャンポンの可能性は残ります`);
+    }
+    if (detail.oneChance && detail.oneChanceShape) {
+      // ワンチャンス=当たり形の数え上げで残り1形だけ(ユーザー定義)。
+      // スジ・壁の証拠に続けて、残った一形を名指しして結論を言う。
+      reasons.push(`見えている牌から数えると、当たり方は${waitShapeName(detail.oneChanceShape)}の一形しか残っていません(ワンチャンス)`);
     }
     if (detail.urasujiOfDeclaration) {
       reasons.push('ただし宣言牌の裏筋にあたるので、警戒は少し残します');
