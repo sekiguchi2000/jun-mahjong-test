@@ -92,9 +92,74 @@ export class BrowserAudioBackend {
     this.AudioCtor = AudioCtor;
     this.AudioContextCtor = AudioContextCtor;
     this.context = null;
+    this.sfxBufferCache = new Map();
+  }
+
+  // 効果音はWebAudioバッファで鳴らす。HTMLAudioを打牌のたびに新規生成する方式は、
+  // iOS Safariでユーザー操作が途絶える区間(リーチ後の自動ツモ切り等)に
+  // 再生をブロックされて無音になるため。AudioContextは一度unlockすれば鳴り続ける。
+  async _sfxBuffer(asset) {
+    if (this.sfxBufferCache.has(asset.src)) return this.sfxBufferCache.get(asset.src);
+    const promise = (async () => {
+      const response = await fetch(asset.src);
+      if (!response.ok) {
+        throw Object.assign(new Error(`Could not load ${asset.id}`), { code: 'AUDIO_DECODE_FAILED' });
+      }
+      const data = await response.arrayBuffer();
+      return await new Promise((resolve, reject) => {
+        // Safariの旧コールバック形式とPromise形式の両対応
+        const maybe = this.context.decodeAudioData(data, resolve, reject);
+        if (maybe && typeof maybe.then === 'function') maybe.then(resolve, reject);
+      });
+    })();
+    this.sfxBufferCache.set(asset.src, promise);
+    promise.catch(() => this.sfxBufferCache.delete(asset.src));
+    return promise;
+  }
+
+  _createSfxPlayback(asset, { loop = false, onEnded = () => {}, onError = () => {} } = {}) {
+    this.context ??= new this.AudioContextCtor();
+    const context = this.context;
+    const gainNode = context.createGain();
+    gainNode.connect(context.destination);
+    let source = null;
+    let stopped = false;
+    return {
+      play: async () => {
+        try {
+          if (context.state === 'suspended') context.resume().catch(() => {});
+          const buffer = await this._sfxBuffer(asset);
+          if (stopped) return;
+          source = context.createBufferSource();
+          source.buffer = buffer;
+          source.loop = Boolean(loop);
+          source.connect(gainNode);
+          source.onended = () => { if (!stopped && !loop) onEnded(); };
+          source.start();
+        } catch (error) {
+          onError(Object.assign(error instanceof Error ? error : new Error(String(error)), {
+            code: error?.code ?? 'AUDIO_DECODE_FAILED',
+          }));
+        }
+      },
+      pause: () => { try { source?.stop(); } catch { /* 未開始でも停止扱い */ } },
+      stop: () => {
+        stopped = true;
+        try { source?.stop(); } catch { /* 未開始でも停止扱い */ }
+        try { gainNode.disconnect(); } catch { /* 二重切断は無害 */ }
+      },
+      setVolume: value => { try { gainNode.gain.value = clamp(Number(value) || 0, 0, 1); } catch { /* no-op */ } },
+    };
+  }
+
+  suspendContext() {
+    try { this.context?.suspend?.()?.catch?.(() => {}); } catch { /* no-op */ }
   }
 
   async unlock() {
+    // iOS Safari: ゲーム音をバックグラウンドの音楽・ラジオと共存させる(奪わない)。
+    // ambientは消音スイッチにも従う自然な挙動になる。
+    try { if (globalThis.navigator?.audioSession) globalThis.navigator.audioSession.type = 'ambient'; } catch { /* 非対応環境 */ }
     if (!this.AudioContextCtor) return true;
     this.context ??= new this.AudioContextCtor();
     if (this.context.state === 'suspended') await this.context.resume();
@@ -102,6 +167,9 @@ export class BrowserAudioBackend {
   }
 
   createPlayback(asset, { loop = false, onEnded = () => {}, onError = () => {} } = {}) {
+    if (asset?.bus === 'sfx' && typeof this.AudioContextCtor === 'function') {
+      return this._createSfxPlayback(asset, { loop, onEnded, onError });
+    }
     if (typeof this.AudioCtor !== 'function') {
       throw Object.assign(new Error('HTML Audio is unavailable'), { code: 'AUDIO_UNAVAILABLE' });
     }
@@ -228,6 +296,12 @@ export class AudioDirector {
 
   setMuted(muted) {
     this.muted = muted === true;
+    if (this.muted) {
+      // ハードミュート: 音量0ではなく再生そのものを止め、オーディオセッションを手放す。
+      // これでミュート漏れが構造的に消え、スマホの音楽・ラジオ再生も奪わない。
+      this.stopAll('muted');
+      try { this.backend?.suspendContext?.(); } catch { /* 停止失敗でも続行 */ }
+    }
     this._applyAllVolumes();
     return this.muted;
   }
@@ -266,6 +340,7 @@ export class AudioDirector {
 
   async playBgm(id, options = {}) {
     if (this.disposed) return result(false, { reason: 'DISPOSED' });
+    if (this.muted) return result(false, { reason: 'MUTED', id });
     const asset = this._asset('music', id);
     if (!asset) return result(false, { reason: 'ASSET_UNAVAILABLE', id });
     if (this.musicTrack?.id === id && options.restart !== true) {
@@ -296,6 +371,7 @@ export class AudioDirector {
 
   async playVoice(id, options = {}) {
     if (this.disposed) return result(false, { reason: 'DISPOSED' });
+    if (this.muted) return result(false, { reason: 'MUTED', id });
     if (!this.voiceEnabled) return result(false, { reason: 'VOICE_DISABLED', id });
     const asset = this._asset('voice', id);
     if (!asset) return result(false, { reason: 'ASSET_UNAVAILABLE', id });
@@ -328,6 +404,7 @@ export class AudioDirector {
 
   async playSfx(id, options = {}) {
     if (this.disposed) return result(false, { reason: 'DISPOSED' });
+    if (this.muted) return result(false, { reason: 'MUTED', id });
     const asset = this._asset('sfx', id);
     if (!asset) return result(false, { reason: 'ASSET_UNAVAILABLE', id });
     const epoch = this.epoch;

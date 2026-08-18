@@ -59,7 +59,7 @@ function tileAt(view, index) {
 }
 
 function actionLabel(action, view, offer = null) {
-  if (!action) return offer?.type === 'ron' ? 'ロンを見送る' : '今回は鳴かない';
+  if (!action) return offer?.type === 'ron' ? 'ロンを見送る' : 'スルー（鳴かない）';
   if (action.action === 'tsumo') return 'ツモあがり';
   if (action.action === 'ron') return 'ロンあがり';
   if (action.action === 'discard') {
@@ -69,7 +69,7 @@ function actionLabel(action, view, offer = null) {
   }
   if (action.action === 'pon') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をポン`;
   if (action.action === 'minkan') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をカン`;
-  if (action.action === 'chi') return 'この牌をチー';
+  if (action.action === 'chi') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をチー`;
   return action.action;
 }
 
@@ -498,31 +498,56 @@ function turnExplanationParts(view, analysis) {
   return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...tail];
 }
 
-function claimExplanation(view, offer, analysis) {
+function shantenLabel(shanten) {
+  return shanten === 0 ? 'テンパイ' : `${shanten}向聴`;
+}
+
+function claimExplanationParts(view, offer, analysis) {
   const action = analysis?.selected?.action;
   const reason = analysis?.decisiveFactors?.[0]?.code;
   if (offer?.type === 'ron') {
     if (reason === 'LAST_PLACE_LOCK_FORBIDDEN') {
-      return 'あがれますが、このままあがると最下位のまま終わる条件です。少しでも順位が上がる可能性を残すため、ここは見送ります。';
+      return ['あがれますが、このままあがると最下位のまま終わる条件です。少しでも順位が上がる可能性を残すため、ここは見送ります。'];
     }
-    return 'あがりを選べます。点棒と順位の条件を満たすので、ここで終わらせます。';
+    return ['あがりを選べます。点棒と順位の条件を満たすので、ここで終わらせます。'];
   }
+
+  const claimedName = offer?.tile ? tileName(offer.tile.kind) : 'その牌';
+  const ponCandidate = (analysis?.candidates ?? []).find(candidate =>
+    String(candidate.candidateId ?? '').startsWith('pon:'));
+  const ponMetrics = ponCandidate?.metrics ?? {};
+  const shantenSentence = Number.isInteger(ponMetrics.shantenBefore) && Number.isInteger(ponMetrics.shantenAfter)
+    ? (ponMetrics.shantenAfter < ponMetrics.shantenBefore
+      ? `ポンすると手は${shantenLabel(ponMetrics.shantenBefore)}から${shantenLabel(ponMetrics.shantenAfter)}へ進みます。`
+      : `ポンしても手は${shantenLabel(ponMetrics.shantenBefore)}のままで、速くなりません。`)
+    : '';
+
   if (!action) {
-    if (reason === 'ANKO_ALREADY_COMPLETE') {
-      return 'その牌は手の中で3枚そろっていて、面子として完成しています。鳴くと完成形を崩すだけなので見送ります。';
+    if (reason === 'ANKO_ALREADY_COMPLETE' || ponMetrics.ankoComplete) {
+      return [`スルーを勧めます。${claimedName}は手の中で3枚そろっていて、すでに面子として完成しています。ここで鳴くと完成形を崩すだけです。`];
     }
-    if (reason === 'KEEP_CLOSED') {
-      return '今鳴くと手の形が固定されます。はっきりした得が確認できないので、鳴かずに自分のツモを待ちます。';
-    }
-    return 'この鳴きは、今の公開情報だけでは良さを計算しきれません。無理に鳴かず、手の形を保ちます。';
+    const improves = Number.isInteger(ponMetrics.shantenBefore) && Number.isInteger(ponMetrics.shantenAfter) &&
+      ponMetrics.shantenAfter < ponMetrics.shantenBefore;
+    const parts = improves
+      ? [`スルー（鳴かない）を勧めます。${claimedName}をポンすれば${shantenLabel(ponMetrics.shantenAfter)}まで進みますが、確実な役が付かず、安い手か役無しになりがちです。`]
+      : [`スルー（鳴かない）を勧めます。${claimedName}を鳴いても、確実な役や速度の得が見込めません。${shantenSentence}`.trim()];
+    parts.push((view?.melds?.length ?? 0) > 0
+      ? 'すでに副露している手ですが、この鳴きには得がありません。手の自由度を保って自分のツモで進めます。'
+      : '鳴くと手の形が固定され、リーチ（と裏ドラ）の道も消えます。門前のまま自分のツモで進めるほうが打点を狙えます。');
+    return parts;
   }
   if (action.action === 'pon' && reason === 'YAKUHAI_PON') {
-    return '役になる牌なので、鳴いてもあがりへの道を残せます。速度を上げる選択です。';
+    const parts = [`ポンを勧めます。${claimedName}は役牌なので、鳴いた時点で役（1翻）が確定し、あがりの資格を失いません。`];
+    if (shantenSentence) parts.push(shantenSentence);
+    parts.push('代わりにリーチと門前の役は消えます。ここは打点より速度を取る場面と判断しました。');
+    return parts;
   }
   if (action.action === 'pon' && reason === 'TOITOI_ROUTE') {
-    return '同じ牌の組を増やす手が見えているので、鳴いて手を進めます。';
+    const parts = [`ポンを勧めます。対子が${ponMetrics.pairs ?? '複数'}組あり、トイトイ（すべてを刻子でそろえる2翻役）の形です。${claimedName}を刻子にして前へ進めます。`];
+    if (shantenSentence) parts.push(shantenSentence);
+    return parts;
   }
-  return 'この鳴きは選べますが、点数や待ちの細部はまだ自動計算していません。理由を過大に断定せず、速度を優先する選択として表示します。';
+  return ['この鳴きは選べますが、点数や待ちの細部はまだ自動計算していません。理由を過大に断定せず、速度を優先する選択として表示します。'];
 }
 
 function shortHeadline(phase, view, analysis, offer = null) {
@@ -532,11 +557,11 @@ function shortHeadline(phase, view, analysis, offer = null) {
     if (factors.has('LAST_PLACE_LOCK_FORBIDDEN')) return '順位を守るため、ロンを見送る';
     if (offer?.type === 'ron' && action?.action === 'ron') return '点棒と順位条件を満たすのでロンする';
     if (offer?.type === 'ron' && action?.action === 'pass') return 'あがらず、次の局で順位を上げる余地を残す';
-    if (action?.action === 'pon' && factors.has('YAKUHAI_PON')) return '役牌を鳴いて速度を上げる';
-    if (action?.action === 'pon' && factors.has('TOITOI_ROUTE')) return '同じ牌を集める手を進める';
-    if (action?.action === 'chi') return 'この順子を使って形を一歩進める';
-    if (action?.action === 'minkan' || action?.action === 'kakan') return '手を進めるために槓を選ぶ';
-    if (!action) return offer?.type === 'ron' ? '順位優先でロンを見送る' : '鳴かずに手の形を保つ';
+    if (action?.action === 'pon' && factors.has('YAKUHAI_PON')) return 'ポン推奨: 役牌で1翻を確定させる';
+    if (action?.action === 'pon' && factors.has('TOITOI_ROUTE')) return 'ポン推奨: トイトイへ刻子を増やす';
+    if (action?.action === 'chi') return 'チーで形を一歩進める';
+    if (action?.action === 'minkan' || action?.action === 'kakan') return 'カンを選ぶ';
+    if (!action) return offer?.type === 'ron' ? '順位優先でロンを見送る' : 'スルー推奨: 門前を守る';
     return '鳴くことで手を進める理由がある';
   }
   if (action?.action === 'tsumo') return 'ここはツモあがり';
@@ -562,7 +587,7 @@ function resultBase(phase, view, analysis, offer = null) {
   const action = analysis?.selected?.action ?? null;
   const detailParagraphs = phase === 'turn'
     ? turnExplanationParts(view, analysis)
-    : [claimExplanation(view, offer, analysis)];
+    : claimExplanationParts(view, offer, analysis);
   const explanation = detailParagraphs.join('');
   return freeze({
     version: DECISION_COACH_VERSION,

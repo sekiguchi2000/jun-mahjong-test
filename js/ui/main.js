@@ -34,11 +34,11 @@ import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
-import { AudioDirector } from './audio-director.js?v=17';
+import { AudioDirector } from './audio-director.js?v=18';
 import { classifyWinPresentation, winCinematicCopy, winSuspenseDuration } from './win-presentation.js?v=3';
 import {
   AUDIO_MANIFEST, CHARACTER_AUDIO_IDS, selectThoughtVoiceId,
-} from './audio-manifest.js?v=17';
+} from './audio-manifest.js?v=18';
 
 const $ = (sel) => document.querySelector(sel);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));

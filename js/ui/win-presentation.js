@@ -28,9 +28,22 @@ export function classifyWinPresentation({ score = {}, loser = null } = {}) {
   const yakumanCount = normalizedYakumanCount(score);
   const kind = loser === null ? 'tsumo' : 'ron';
   let tier = TIERS[0];
-  if (yakumanCount > 0) {
-    tier = Object.freeze({ id: 'yakuman', label: yakumanCount >= 2 ? '複数役満' : '役満', minimum: 32000, strikeMs: 1500, holdMs: 5200, particleCount: 54 });
+  // 格付けはエンジンの限度名(limitName)を正とする。点数しきい値だけで判定すると
+  // 親の満貫(12000点)が跳満に化ける・供託込みで格が上振れする(実戦報告バグ)。
+  const limitName = typeof score?.limitName === 'string' ? score.limitName : null;
+  if (yakumanCount > 0 || (limitName && limitName.includes('役満'))) {
+    const multiple = yakumanCount >= 2 || /^\d+倍役満$/.test(limitName ?? '');
+    tier = Object.freeze({ id: 'yakuman', label: multiple ? '複数役満' : '役満', minimum: 32000, strikeMs: 1500, holdMs: 5200, particleCount: 54 });
+  } else if (limitName === '満貫') {
+    tier = TIERS[1];
+  } else if (limitName === '跳満') {
+    tier = TIERS[2];
+  } else if (limitName === '倍満' || limitName === '三倍満') {
+    tier = TIERS[3];
+  } else if (limitName === '') {
+    tier = TIERS[0];
   } else {
+    // limitNameが無い旧形式の入力だけ、従来の点数しきい値へフォールバック
     for (const candidate of TIERS) if (total >= candidate.minimum) tier = candidate;
   }
   const tierIndex = tier.id === 'yakuman' ? 4 : TIERS.findIndex(candidate => candidate.id === tier.id);

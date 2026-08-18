@@ -29,7 +29,7 @@ export const AUDIO_MANIFEST = Object.freeze({
   voice: Object.freeze(voice),
   sfx: Object.freeze({
     'tile-discard': Object.freeze({
-      src: 'assets/audio/sfx/tile_discard_v1.ogg',
+      src: 'assets/audio/sfx/tile_discard_v2.ogg',
       gain: 0.72,
     }),
     'ui-button': Object.freeze({

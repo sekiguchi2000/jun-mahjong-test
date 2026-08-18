@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v54-stats';
+const CACHE = 'jun-mahjong-v55-claim-audio-batch';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -16,11 +16,11 @@ const ASSETS = [
   '.', 'index.html', 'css/style.css?v=12', 'css/table-v9.css?v=16',
   'css/tokens-v15.css?v=15', 'css/learning-modes-v15.css?v=17', 'css/product-ui-v16.css?v=1',
   'css/product-ui-v17.css?v=1', 'css/are-report-v1.css?v=3', 'css/stats-v1.css?v=1', 'css/win-cinematic-v1.css?v=4', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=1', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=4', 'manifest.webmanifest',
-  'js/ui/main.js?v=48', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
+  'js/ui/main.js?v=49', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
   'js/vendor/three/three.module.js', 'js/vendor/three/three.core.js',
   'js/vendor/three/addons/geometries/RoundedBoxGeometry.js',
   'js/ui/win-presentation.js?v=3',
-  'js/ui/decision-presenter.js?v=17', 'js/ui/audio-director.js?v=17', 'js/ui/audio-manifest.js?v=17',
+  'js/ui/decision-presenter.js?v=17', 'js/ui/audio-director.js?v=18', 'js/ui/audio-manifest.js?v=18',
   'js/ui/gamepad-controller.js?v=17',
   'js/platform/desktop-settings.js?v=17',
   'js/engine/rules.js', 'js/engine/tiles.js', 'js/engine/wall.js',
@@ -31,7 +31,7 @@ const ASSETS = [
   'js/engine/decision-contract.js', 'js/engine/decision-log.js',
   'js/engine/legal-actions.js', 'js/engine/decision-boundary.js',
   'js/engine/decision-evaluator.js?v=18', 'js/engine/win-uncertainty.js',
-  'js/engine/review-evaluator.js?v=18', 'js/engine/session-snapshot.js', 'js/engine/decision-coach.js?v=4',
+  'js/engine/review-evaluator.js?v=18', 'js/engine/session-snapshot.js', 'js/engine/decision-coach.js?v=5',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
   'assets/gptimage_v1/table_felt_v1.png',
   'assets/gptimage_v1/hanzou_portrait_v1.png',
@@ -46,7 +46,7 @@ const ASSETS = [
   'assets/gptimage_v6/riichi_stick_sprite_v1.png',
   'assets/gptimage_v7/title_private_table_v1.png',
   'assets/audio/music/night_private_table_loop_v1.ogg',
-  'assets/audio/sfx/tile_discard_v1.ogg',
+  'assets/audio/sfx/tile_discard_v2.ogg',
   'assets/audio/sfx/ui_button_v1.ogg',
   'assets/audio/sfx/call_accent_v1.ogg',
   'assets/audio/VOICE_LICENSES.md',

@@ -41,5 +41,13 @@
 .stats-empty { color: #9db2c8; }
 .stats-footer {
   padding: 10px 18px 14px; border-top: 1px solid rgba(140, 170, 205, 0.2);
-  display: flex; justify-content: flex-end;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
 }
+.stats-footer .btn.primary { min-width: 180px; }
+/* リセットは破壊的操作: 主導線から外し、小さな赤い文字リンクとして隅に置く */
+.stats-clear-link {
+  appearance: none; background: none; border: none; cursor: pointer;
+  color: #d4655e; font-size: 0.78rem; text-decoration: underline;
+  padding: 4px 2px; opacity: 0.85;
+}
+.stats-clear-link:hover { opacity: 1; }

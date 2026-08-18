@@ -1175,6 +1175,22 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     const kind = offer.tile.kind;
     const isYakuhai = isDragon(kind) || kind === view.seatWind || kind === view.roundWind;
     const pairs = counts.filter(count => count >= 2).length;
+    // ガイド用: ポンした場合の向聴数変化(鳴いた後の最善打牌まで見て比較)
+    const meldCount = (view.melds ?? []).length;
+    const shantenBefore = shanten(counts, meldCount);
+    let shantenAfter = null;
+    if (counts[kind] >= 2) {
+      const afterCounts = counts.slice();
+      afterCounts[kind] -= 2;
+      shantenAfter = Infinity;
+      for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
+        if (afterCounts[discardKind] === 0) continue;
+        afterCounts[discardKind]--;
+        shantenAfter = Math.min(shantenAfter, shanten(afterCounts, meldCount + 1));
+        afterCounts[discardKind]++;
+      }
+      if (!Number.isFinite(shantenAfter)) shantenAfter = null;
+    }
     // 手中に暗刻が完成しているなら、4枚目のポンは面子を壊すだけの無意味な鳴き
     // (カルテ10号: 白白白を持って4枚目の白をポンした実戦バグ)
     const ankoComplete = counts[kind] >= 3;
@@ -1183,7 +1199,7 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true,
       allowed: !ankoComplete,
       utility: ankoComplete ? -1000 : (isYakuhai ? 1000 : (toitoiRoute ? 900 : -100)),
-      metrics: { kind, isYakuhai, pairs, requiredPairs: style.ponPairMin, ankoComplete },
+      metrics: { kind, isYakuhai, pairs, requiredPairs: style.ponPairMin, ankoComplete, shantenBefore, shantenAfter },
       reasons: [ankoComplete ? 'ANKO_ALREADY_COMPLETE'
         : (isYakuhai ? 'YAKUHAI_PON' : (toitoiRoute ? 'TOITOI_ROUTE' : 'KEEP_CLOSED'))],
     };
