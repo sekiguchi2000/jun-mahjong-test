@@ -254,7 +254,15 @@ function assessAgainstThreat(kind, threat, visible) {
   if (candidateRemaining >= 1) residualWaits.push('TANKI');
   if (kokushiMissingWaitPossible(kind, threat, visible)) residualWaits.push('KOKUSHI');
   const sujiEliminated = sequenceRoutes.filter(route => route.eliminatedBySuji).length;
-  const oneChanceRoutes = sequenceRoutes.filter(route => route.possible && route.oneChance).length;
+  // ワンチャンス=両面ルート基準。嵌張・辺張の構成牌が薄いだけでは名乗らない。
+  // 生きている両面ルートが存在し、その全てが「必要牌の残り1枚」のときだけ真。
+  const aliveRyanmen = sequenceRoutes.filter(route => route.possible && route.shape === 'RYANMEN');
+  const oneChanceRoutes = aliveRyanmen.filter(route => route.oneChance).length;
+  const oneChance = aliveRyanmen.length > 0 && aliveRyanmen.every(route => route.oneChance);
+  const oneChanceWallKinds = oneChance
+    ? [...new Set(aliveRyanmen.flatMap(route =>
+        route.companions.filter((companion, i) => route.companionRemaining[i] === 1)))]
+    : [];
   const noChanceRoutes = sequenceRoutes.filter(route => route.eliminatedByNoChance).length;
   const routeRisk = sequenceRoutes.reduce((sum, route) => sum + routeWeight(route), 0);
   const residualRisk = residualWaits.reduce((sum, wait) =>
@@ -273,8 +281,9 @@ function assessAgainstThreat(kind, threat, visible) {
       : 'NON_GENBUTSU_RESIDUAL_ONLY',
     suji: sujiEliminated > 0,
     sujiEliminated,
-    oneChance: oneChanceRoutes > 0,
+    oneChance,
     oneChanceRoutes,
+    oneChanceWallKinds,
     noChance: noChanceRoutes > 0,
     noChanceRoutes,
     sequenceRoutes,
