@@ -61,9 +61,15 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
   // 「本線はタンヤオ・ピンフ系」と言った実戦バグ)。基本線は他プランに譲る
   if (melds.length === 0 || meldAllSimple) {
     const tanyaoRatio = total > 0 ? (simpleCount + (meldAllSimple ? melds.length * 3 : 0)) / total : 0;
+    // 暗刻が並ぶ牌姿はピンフが死んでいて対子系の手(カルテ27号: 暗刻2つの手で
+    // 「本線はタンヤオ・ピンフ系」と言った実戦バグ)。床weightを外して他プランに譲る
+    const handCounts = toCounts(handAll);
+    const ankoCount = handCounts.filter(count => count >= 3).length;
+    const ankoDamp = ankoCount >= 2 ? 0.3 : ankoCount === 1 ? 0.75 : 1;
+    const baseWeight = Math.max(ankoCount >= 2 ? 0.05 : 0.35, Math.min(1, tanyaoRatio * 1.15)) * ankoDamp;
     plans.push({
       code: 'TANYAO_PINFU',
-      weight: Math.max(0.35, Math.min(1, tanyaoRatio * 1.15)),
+      weight: baseWeight,
       value: 1 + 0.3 * redCount,
       notes: redCount > 0 ? ['RED5_IN_HAND'] : [],
     });
@@ -144,12 +150,19 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
   const ponMelds = melds.filter(meld =>
     meld?.type === 'pon' || meld?.type === 'minkan' || meld?.kanOrigin).length;
   // 副露が進むほど手中の対子は減るので、ポン数を刻子分として合算して判定する
-  // (カルテ23号: 西・1筒・東と3ポンした手でトイトイを見失った)
-  if (ponMelds >= 1 && ponMelds + pairKinds.length >= 4) {
+  // (カルテ23号: 西・1筒・東と3ポンした手でトイトイを見失った)。
+  // 門前でも暗刻が2つ並べば対子系(トイトイ・三暗刻筋)を立てる(カルテ27号)
+  const ankoKinds = [];
+  for (let kind = 0; kind < KIND_COUNT; kind++) {
+    if (counts[kind] >= 3) ankoKinds.push(kind);
+  }
+  const tripletPower = ponMelds + ankoKinds.length;
+  if ((ponMelds >= 1 && ponMelds + pairKinds.length >= 4) ||
+      (ankoKinds.length >= 2 && pairKinds.length >= 4)) {
     plans.push({
       code: 'TOITOI',
       pairKinds,
-      weight: Math.min(1, 0.35 + 0.2 * (ponMelds - 1) + 0.15 * Math.max(0, pairKinds.length - 3)),
+      weight: Math.min(1, 0.35 + 0.2 * Math.max(0, tripletPower - 1) + 0.15 * Math.max(0, pairKinds.length - 3)),
       value: 1.5,
       notes: [],
     });

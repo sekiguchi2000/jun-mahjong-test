@@ -493,9 +493,16 @@ function readBranchParts(view, analysis) {
 
 function planHeadlineSentences(selected) {
   const planEvaluation = selected?.metrics?.planEvaluation;
-  const top = planEvaluation?.topPlans?.[0]?.code;
+  const top = planEvaluation?.topPlans?.[0];
   const sentences = [];
-  if (top && PLAN_LABELS[top]) sentences.push(`今の本線は${PLAN_LABELS[top]}です。`);
+  const strength = top ? (top.weight ?? 0) * (top.value ?? 0) : 0;
+  // プランが弱い牌姿(暗刻が並ぶ手なり等)で「本線はタンヤオ・ピンフ」と
+  // 嘘をつかない(カルテ27号)。役の当てが無いことを正直に言う
+  if (top && PLAN_LABELS[top.code] && strength >= 0.45) {
+    sentences.push(`今の本線は${PLAN_LABELS[top.code]}です。`);
+  } else if (top) {
+    sentences.push('はっきりした役の本線はまだ無い牌姿です。まずは形のテンパイを目指し、役はリーチや途中の変化で付けます。');
+  }
   if (planEvaluation?.valueBiasCode === 'CHASE_VALUE') {
     sentences.push('点棒状況から、順位を上げるには打点が必要です。多少効率を落としても高い手を狙います。');
   } else if (planEvaluation?.valueBiasCode === 'PROTECT_LEAD') {
@@ -661,7 +668,10 @@ function turnExplanationParts(view, analysis) {
     const honor = selectedHonorContext(view, action);
     const selectedPlanNotes = selected?.metrics?.planEvaluation?.notes ?? [];
     if (honor && honor.value && honor.copies === 1 && selectedPlanNotes.includes('LONE_YAKUHAI_EARLY_CUT')) {
-      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、タンヤオ・ピンフ系で3900点以上を狙う方が本線なので、序盤のうちに切ります。`);
+      const topPlan = selected?.metrics?.planEvaluation?.topPlans?.[0];
+      const strongTanyao = topPlan?.code === 'TANYAO_PINFU' &&
+        (topPlan.weight ?? 0) * (topPlan.value ?? 0) >= 0.45;
+      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、${strongTanyao ? 'タンヤオ・ピンフ系で3900点以上を狙う方が本線' : '手なりでテンパイへ進む方が価値が高い'}ので、序盤のうちに切ります。`);
     } else if (honor && !honor.value && honor.copies === 1) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
     } else if (honor && honor.value && honor.copies === 1) {
