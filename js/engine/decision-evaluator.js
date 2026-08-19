@@ -35,6 +35,16 @@ export const AI_STYLES = Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
     cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never',
   }),
+  // スピリチュアル(遊び枠): 挙動はバランス相当+対子場チートイ固定+南場のツキ吸い取り鳴き。
+  // ツキ状態(あがり/放銃後)はUI側がspiritualHotへ切り替える
+  spiritual: Object.freeze({
+    foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
+    riichiHoldPolicy: 'balanced', spiritualRules: true,
+  }),
+  spiritualHot: Object.freeze({
+    foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6,
+    planWeight: 1.3, riichiHoldPolicy: 'upgrade', spiritualRules: true,
+  }),
 });
 
 export const GUIDE_STYLES = Object.freeze([
@@ -42,6 +52,7 @@ export const GUIDE_STYLES = Object.freeze([
   { profile: 'balance', label: 'バランス', description: '攻めと守りの中間。手の価値と危険を天秤にかける' },
   { profile: 'defense', label: '守り', description: '手の価値よりリスクが高ければ回す。無理なら降りる' },
   { profile: 'efficiency', label: '効率', description: '危険は無視して、最も効率よくあがりに向かう' },
+  { profile: 'spiritual', label: 'スピリチュアル', description: 'ツキと場の偏りを信じる。基本はバランス(遊び)' },
 ]);
 
 const WIN_PREVIEW_KEYS = Object.freeze([
@@ -1296,6 +1307,43 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
     decisiveFactors = efficiencyDecisiveFactors(selected, discardCandidates, context);
   }
 
+  // スピリチュアル(遊び): 3〜10巡目に手牌の対子が4組以上なら「対子場」と信じ、
+  // 七対子だけを狙う打牌に上書きする(降り選択は尊重)
+  if (style.spiritualRules && selected?.action?.action === 'discard' &&
+      !decisiveFactors.some(factor => factor.code === 'FOLD_ON_RIICHI_THREAT')) {
+    const turnNumber = (view.public?.players?.[view.me]?.discards?.length ?? 0) + 1;
+    const handCounts = toCounts(handAll);
+    const pairKindCount = handCounts.filter(count => count >= 2).length;
+    if (turnNumber >= 3 && turnNumber <= 10 && pairKindCount >= 4) {
+      const chiitoiShantenOf = counts13 => {
+        let pairCount = 0;
+        let kindCount = 0;
+        for (const count of counts13) {
+          if (count >= 1) kindCount++;
+          if (count >= 2) pairCount++;
+        }
+        return 6 - pairCount + Math.max(0, 7 - kindCount);
+      };
+      let best = null;
+      for (const candidate of discardCandidates) {
+        const rest = handAll.slice();
+        rest.splice(candidate.action.index, 1);
+        const score = chiitoiShantenOf(toCounts(rest));
+        if (!best || score < best.score ||
+            (score === best.score && (candidate.metrics?.utilityScore ?? -1) > (best.candidate.metrics?.utilityScore ?? -1))) {
+          best = { candidate, score };
+        }
+      }
+      if (best && best.candidate !== selected) {
+        selected = best.candidate;
+        selected.action.riichi = selected.action.riichi === true &&
+          selected.metrics?.riichiEvaluation?.physicalRemaining > 0;
+      }
+      selected.metrics = { ...selected.metrics, spiritualChiitoi: true };
+      decisiveFactors = [{ code: 'SPIRITUAL_CHIITOI_FIELD' }, ...decisiveFactors];
+    }
+  }
+
   return finalizeAnalysis({
     profile: normalizedProfile,
     phase: legacyTrace.phase,
@@ -1615,6 +1663,23 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       ...pass.metrics, shantenBefore: shantenNow, bestClaimShanten,
       ...(deadWaitInfo ? { deadWait: deadWaitInfo } : {}),
     };
+  }
+
+  // スピリチュアル(遊び): 南場で自分が3位/4位のとき、1位/2位の捨て牌は
+  // 役の有無に関係なく鳴いてツキを吸い取る
+  if (style.spiritualRules && view.roundWind === 28 &&
+      (view.placement?.currentRank ?? 0) >= 2) {
+    const fromRank = view.public?.ranking?.indexOf?.(offer.from);
+    if (Number.isInteger(fromRank) && fromRank >= 0 && fromRank <= 1) {
+      const grab = candidates.find(candidate =>
+        ['pon', 'chi', 'minkan'].includes(candidate.action?.action) && candidate.allowed !== false);
+      if (grab) {
+        grab.utility = 1200;
+        grab.reasons = ['SPIRITUAL_LUCK_STEAL'];
+        grab.metrics = { ...grab.metrics, kind: offer.tile.kind };
+        selected = grab;
+      }
+    }
   }
 
   selected ??= pass;

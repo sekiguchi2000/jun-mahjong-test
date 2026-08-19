@@ -533,7 +533,9 @@ function planHeadlineSentences(selected, view) {
     // (2026-08-20ユーザー裁定②: 早くあがれそうだから切り替える、と説明する)
     const hasPonMeld = (view?.melds ?? []).some(meld =>
       meld?.type === 'pon' || meld?.type === 'minkan' || meld?.kanOrigin);
-    if (top.code === 'FORMAL_TENPAI') {
+    if (selected?.metrics?.spiritualChiitoi) {
+      sentences.push('この局は対子場だから、七対子だけを狙います。対子は対子を呼びます。');
+    } else if (top.code === 'FORMAL_TENPAI') {
       sentences.push('この手はもう役を付けにくい形です。ここからは流局時のテンパイ料を目標に、形のテンパイへ向かいます。');
     } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
       sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
@@ -877,6 +879,12 @@ function claimExplanationParts(view, offer, analysis) {
       candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
     return [
       `${label}を勧めます。この手は一色に染まっていて、鳴いても混一色（ホンイツ）が確定しています。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
+    ];
+  }
+  if (reason === 'SPIRITUAL_LUCK_STEAL') {
+    const label = action.action === 'pon' ? 'ポン' : action.action === 'chi' ? 'チー' : 'カン';
+    return [
+      `${label}を勧めます。役があるかどうかは関係ありません。ツイている上位の捨て牌には運が乗っています。鳴いてツキを吸い取りましょう。`,
     ];
   }
   if (reason === 'FORMAL_TENPAI_ROUTE') {

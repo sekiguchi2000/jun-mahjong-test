@@ -324,6 +324,9 @@ class UI {
     this.latestCoachContext = { view: null, offer: null, options: null };
     this.coachCollapsed = false;
     // ガイドの思考モード (2026-08-19ユーザー設計): attack/balance/defense/efficiency
+    // スピリチュアル思考のツキ状態(遊び): win/streak/dealin/neutral
+    this.spiritualMood = 'neutral';
+    this.spiritualWinStreak = 0;
     this.guideStyle = (() => {
       const saved = localStorage.getItem('jun-guide-style-v1');
       return GUIDE_STYLES.some(style => style.profile === saved) ? saved : 'balance';
@@ -1231,6 +1234,26 @@ class UI {
     void this.audio.playVoice(`${character}.${cue}`, { critical });
   }
 
+  effectiveGuideProfile() {
+    if (this.guideStyle === 'spiritual' && this.spiritualMood !== 'neutral') return 'spiritualHot';
+    return this.guideStyle;
+  }
+
+  // ツキ状態の冒頭文(遊び): ガイド文の頭へ必ず付ける
+  applySpiritualFlavor(result) {
+    if (this.guideStyle !== 'spiritual' || !result) return result;
+    const prefix = this.spiritualMood === 'streak' ? '流れが来ているから、'
+      : this.spiritualMood === 'win' ? '今はツキがきているから、'
+      : this.spiritualMood === 'dealin' ? 'ツキをつかむためには、' : '';
+    if (!prefix) return result;
+    return {
+      ...result,
+      headline: prefix + (result.headline ?? ''),
+      explanation: prefix + (result.explanation ?? ''),
+      detailParagraphs: [prefix + (result.detailParagraphs?.[0] ?? ''), ...(result.detailParagraphs ?? []).slice(1)],
+    };
+  }
+
   guideStyleInfo(profile = this.guideStyle) {
     return GUIDE_STYLES.find(style => style.profile === profile) ?? GUIDE_STYLES[1];
   }
@@ -1284,7 +1307,7 @@ class UI {
       return;
     }
     try {
-      this.showCoach(buildTurnCoaching(view, options, this.guideStyle), { view, options });
+      this.showCoach(this.applySpiritualFlavor(buildTurnCoaching(view, options, this.effectiveGuideProfile())), { view, options });
     } catch (error) {
       console.warn('Coach mode skipped an unsupported turn.', error);
       this.hideCoach();
@@ -1297,7 +1320,7 @@ class UI {
       return;
     }
     try {
-      this.showCoach(buildClaimCoaching(view, offer, this.guideStyle), { view, offer });
+      this.showCoach(this.applySpiritualFlavor(buildClaimCoaching(view, offer, this.effectiveGuideProfile())), { view, offer });
     } catch (error) {
       console.warn('Coach mode skipped an unsupported claim.', error);
       this.hideCoach();
@@ -1443,12 +1466,22 @@ class UI {
         return;
       case 'win':
         this.stats.onWin(data);
+        if (data.winner === 0) {
+          this.spiritualWinStreak += 1;
+          this.spiritualMood = this.spiritualWinStreak >= 2 ? 'streak' : 'win';
+        } else if (data.loser === 0) {
+          this.spiritualWinStreak = 0;
+          this.spiritualMood = 'dealin';
+        }
         return this.showWin(data);
       case 'ryukyoku':
         this.stats.onRyukyoku(data);
         return this.showRyukyoku(data);
       case 'nagashi': return this.showNagashi(data);
-      case 'gameEnd': return this.showGameEnd(data);
+      case 'gameEnd':
+        this.spiritualMood = 'neutral';
+        this.spiritualWinStreak = 0;
+        return this.showGameEnd(data);
     }
   }
 
