@@ -276,8 +276,10 @@ function assessAgainstThreat(kind, threat, visible) {
     ? [...new Set(aliveRyanmen.flatMap(route =>
         route.companions.filter((companion, i) => route.companionRemaining[i] === 1)))]
     : [];
+  // 「両面ノーチャンス」を名乗るのは全ての両面ルートが壁(4枚見え)で消えたときだけ。
+  // 片側スジ+片側壁の混在は用語でなく左右の根拠を言い分ける(コーチ側)
   const ryanmenNoChance = ryanmenRoutes.length > 0 && aliveRyanmen.length === 0 &&
-    ryanmenRoutes.some(route => route.eliminatedByNoChance);
+    ryanmenRoutes.every(route => route.eliminatedByNoChance);
   const noChanceRoutes = sequenceRoutes.filter(route => route.eliminatedByNoChance).length;
   const routeRisk = sequenceRoutes.reduce((sum, route) => sum + routeWeight(route), 0);
   const residualRisk = residualWaits.reduce((sum, wait) =>

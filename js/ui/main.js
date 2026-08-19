@@ -653,10 +653,19 @@ class UI {
       if (details.every(detail => detail.genbutsu || detail.noChance)) {
         return '当たる形が一つも残っていません（実質の安全牌）。';
       }
-      const sujiSafe = detail => detail.suji &&
-        !(detail.sequenceRoutes ?? []).some(route => route.possible && route.shape === 'RYANMEN');
+      const deadRyanmen = detail => {
+        const ryanmen = (detail.sequenceRoutes ?? []).filter(route => route.shape === 'RYANMEN');
+        return ryanmen.length > 0 && !ryanmen.some(route => route.possible);
+      };
+      const sujiSafe = detail => {
+        const ryanmen = (detail.sequenceRoutes ?? []).filter(route => route.shape === 'RYANMEN');
+        return ryanmen.length > 0 && ryanmen.every(route => route.eliminatedBySuji);
+      };
       if (details.every(detail => detail.genbutsu || sujiSafe(detail))) {
         return 'スジなので、両面待ちには当たりません。';
+      }
+      if (details.every(detail => detail.genbutsu || deadRyanmen(detail))) {
+        return 'スジと壁で、両面待ちは消えています。';
       }
       if (details.every(detail => detail.genbutsu || (detail.sequenceRoutes ?? []).length === 0)) {
         return '字牌なので、当たるとしてもシャンポンか単騎だけです。';

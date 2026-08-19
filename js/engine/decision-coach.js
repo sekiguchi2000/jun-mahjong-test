@@ -176,11 +176,23 @@ function safetyReasonSentences(view, metrics, selectedTile) {
     }
     const routes = detail.sequenceRoutes ?? [];
     const reasons = [];
-    const sujiRoutes = routes.filter(route => route.eliminatedBySuji);
-    const ryanmenAlive = routes.some(route => route.possible && route.shape === 'RYANMEN');
-    if (sujiRoutes.length > 0 && !ryanmenAlive) {
-      const evidence = [...new Set(sujiRoutes.map(route => tileName(route.alternateKind)))].join('・');
-      reasons.push(`${evidence}が通っているスジなので、両面待ちには当たりません`);
+    // 両面の消え方は左右の側ごとに根拠を言う。片側スジだけで「スジなので両面に
+    // 当たらない」と言い切らない(2026-08-19指摘: 1筒通過のみ=片スジで7筒側は別)
+    const ryanmenRoutes = routes.filter(route => route.shape === 'RYANMEN');
+    const ryanmenAlive = ryanmenRoutes.some(route => route.possible);
+    if (ryanmenRoutes.length > 0 && !ryanmenAlive) {
+      const sujiSides = ryanmenRoutes.filter(route => route.eliminatedBySuji);
+      const wallSides = ryanmenRoutes.filter(route => !route.eliminatedBySuji && route.eliminatedByNoChance);
+      const sujiEvidence = [...new Set(sujiSides.map(route => tileName(route.alternateKind)))].join('・');
+      const wallEvidence = [...new Set(wallSides
+        .flatMap(route => route.companions.filter((companion, i) => route.companionRemaining[i] === 0)))]
+        .map(kind => tileName(kind)).join('・');
+      if (sujiSides.length > 0 && wallSides.length > 0) {
+        reasons.push(`${sujiEvidence}が通っているスジと、${wallEvidence}が4枚見えている壁で、両面待ちはどちら側も消えています`);
+      } else if (sujiSides.length > 0 && wallSides.length === 0 && ryanmenRoutes.every(route => route.eliminatedBySuji)) {
+        reasons.push(`${sujiEvidence}が通っているスジなので、両面待ちには当たりません`);
+      }
+      // 全側が壁のケースは下の壁文+「両面待ちに対しては、ノーチャンスです」が担当
     }
     const wallKinds = [...new Set(routes
       .filter(route => route.eliminatedByNoChance)
@@ -428,8 +440,10 @@ function readBranchParts(view, analysis) {
         const safety = alternative.metrics.safety;
         // 回し先の根拠はその牌の実データで言い分ける。現物でない牌を現物と呼ばない
         const details = safety?.perThreatDetails ?? [];
-        const sujiSafe = detail => detail.suji &&
-          !(detail.sequenceRoutes ?? []).some(route => route.possible && route.shape === 'RYANMEN');
+        const sujiSafe = detail => {
+          const ryanmen = (detail.sequenceRoutes ?? []).filter(route => route.shape === 'RYANMEN');
+          return ryanmen.length > 0 && ryanmen.every(route => route.eliminatedBySuji);
+        };
         let safeDesc = '一番危険の低い';
         let certainNote = '';
         if (safety?.commonGenbutsu || (details.length > 0 && details.every(detail => detail.genbutsu))) {
