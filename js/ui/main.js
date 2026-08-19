@@ -641,7 +641,26 @@ class UI {
           selectedMetrics.ukeirePhysical < metrics.ukeirePhysical) {
         explanation = `形の広さだけなら${name}が上ですが、見えている価値や相手の捨て牌を優先して${selectedName}を選びます。`;
       } else {
-        explanation = '差は小さく、役になりやすさや見えている危険で分かれます。';
+        // 互角の対案こそ具体的に: 曖昧な「差は小さい」で片づけない(2026-08-19指定)
+        const tile = Number.isInteger(candidate.action?.index) ? handAll[candidate.action.index] : null;
+        const kind = tile?.kind ?? -1;
+        const isHonorTile = kind >= 27;
+        const isValueHonor = kind >= 31 || kind === view?.seatWind || kind === view?.roundWind;
+        const NOTE_PHRASES = {
+          BLOCK_CORE: '手の骨組みの牌', RED5_LINK: '赤5と繋がる形',
+          DOUBLE_WIND_KEEP: '場風と自風が重なる牌', DORA_HONOR_KEEP: 'ドラの字牌', RED_TILE: '赤牌',
+        };
+        const keep = (metrics.planEvaluation?.notes ?? [])
+          .map(note => NOTE_PHRASES[note]).find(Boolean);
+        if (isHonorTile && isValueHonor) {
+          explanation = `${name}は重なれば役（1翻）になる牌。その芽を見て${selectedName}を先にしますが、${name}から切る選択もありです。`;
+        } else if (isHonorTile) {
+          explanation = `${name}は役にならない字牌で、${selectedName}切りとほぼ互角です。${name}から切る選択もありです。`;
+        } else if (keep) {
+          explanation = `${name}は${keep}なので提案では残します。差は小さく、${name}切りもありです。`;
+        } else {
+          explanation = `${selectedName}切りとほぼ互角です。${name}から切る選択もありです。`;
+        }
       }
       return { action: candidate.action, explanation };
     });

@@ -566,6 +566,20 @@ function comparisonParts(view, analysis) {
     }
     if (!Number.isFinite(metrics.ukeirePhysical) || !Number.isFinite(selectedMetrics.ukeirePhysical)) continue;
     const delta = selectedMetrics.ukeirePhysical - metrics.ukeirePhysical;
+    // 判断の分かれる字牌の対案は必ず具体的に言う(2026-08-19指定:
+    // 「なんで南や白じゃないのか」を曖昧語でなく牌ごとの理由で説明する)
+    if (isHonor(tile.kind) && delta >= 0 && delta <= 2) {
+      if (valueHonor(tile, view)) {
+        parts.push(delta === 0
+          ? `${name}を切る案とは互角です。${name}はもう1枚重なると役として使える牌なので、その芽を見て${selectedName}を先にしましたが、${name}から切る選択もありです。`
+          : `${name}を切る案は受け入れが${delta}枚だけ狭くなります。${name}はもう1枚重なると役として使える牌でもあるので残しましたが、${name}から切る選択もありです。`);
+      } else {
+        parts.push(delta === 0
+          ? `${name}を切る案とは互角です。${name}は役にならない字牌で伸びもないため、${selectedName}切りとの差はほぼありません。${name}から切る選択もありです。`
+          : `${name}は役にならない字牌なので早めに手放す考え方もあります。受け入れが${delta}枚狭くなるぶん${selectedName}を先にしましたが、${name}から切る選択もありです。`);
+      }
+      continue;
+    }
     // 受け入れが狭いだけの案は列挙しない(受け入れの中身は本文で説明済み)
     if (delta > 0) continue;
     // v12: 受け入れ同数の分かれ目はプラン価値で説明する
