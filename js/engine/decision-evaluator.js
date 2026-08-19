@@ -751,22 +751,35 @@ function discardCandidate({
           else widenKinds.push(draw);
         }
       }
-      const pressure = threats.length > 0 || (context.pressureSignals?.length ?? 0) > 0;
+      // 圧の質を分ける (2026-08-20ユーザー裁定③):
+      //  強い圧(リーチ/気配B=ほぼ完成) → 固定されると危険なので保留を許す
+      //  近づく圧(気配C=テンパイへ向かう河) → リーチの制圧効果(相手を降ろす)を
+      //  取りにいく=保留せず宣言する
+      const strongPressure = threats.length > 0 ||
+        (context.pressureSignals ?? []).some(signal => signal.confidence === 'B');
+      const risingPressure = !strongPressure &&
+        (context.pressureSignals ?? []).some(signal => signal.confidence === 'C');
       // 残り20枚以下は変化を待つ時間がない=薄くてもリーチで裏・一発を取りにいく
-      // (気配相手がいる場合の保留だけは残す=降りられる形を保つ)
       const timeLeft = (view.public?.remaining ?? 99) > 20;
-      const holdBack = holdPolicy === 'upgrade'
+      let holdBack = holdPolicy === 'upgrade'
         ? (upgradeLive >= 8 && timeLeft)
         : holdPolicy === 'balanced'
-          ? ((upgradeLive >= 6 && timeLeft) || (pressure && upgradeLive >= 3))
-          : ((upgradeLive >= 4 && timeLeft) || pressure);
+          ? ((upgradeLive >= 6 && timeLeft) || (strongPressure && upgradeLive >= 3))
+          : ((upgradeLive >= 4 && timeLeft) || strongPressure);
+      let suppressionDeclare = false;
+      if (holdBack && risingPressure) {
+        holdBack = false;
+        suppressionDeclare = true;
+      }
       if (holdBack) {
         declareRiichi = false;
         riichiEvaluation = {
           ...riichiEvaluation,
           holdBack: true,
-          hold: { weakWait: true, upgradeLive, tanyaoKinds, widenKinds, pressure },
+          hold: { weakWait: true, upgradeLive, tanyaoKinds, widenKinds, pressure: strongPressure },
         };
+      } else if (suppressionDeclare) {
+        riichiEvaluation = { ...riichiEvaluation, suppressionDeclare: true };
       }
     }
   }
@@ -1554,7 +1567,12 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       const tanyaoCall = claimedAllSimple && meldsAllSimple && handNonSimple <= 1 && shantenNow <= 3;
       const backedCall = backedKind !== null && shantenNow <= 2;
       const honitsuCall = flushCall && shantenNow <= 3;
-      if (!tanyaoCall && !backedCall && !honitsuCall) continue;
+      // 形式テンパイ切替 (2026-08-20ユーザー裁定①): 2副露以上で役の道が細い手は、
+      // テンパイ料を目標に、向聴の進む鳴きを解禁する
+      const formalCall = (view.melds ?? []).length >= 2 &&
+        !flushCall && backedKind === null &&
+        (!meldsAllSimple || handNonSimple >= 2);
+      if (!tanyaoCall && !backedCall && !honitsuCall && !formalCall) continue;
       // 死にテンパイ判定 (カルテ29号): 鳴けばテンパイでも待ちが残り1枚以下なら
       // 手を固定せずスルーし、その事実を理由として持ち帰る
       if (afterBest === 0) {
@@ -1573,7 +1591,8 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
         backedKind: (tanyaoCall || honitsuCall) ? null : backedKind, evaluated: true,
       };
       candidate.reasons = [tanyaoCall ? 'CALL_TANYAO_SPEED'
-        : honitsuCall ? 'CALL_FLUSH_SPEED' : 'CALL_YAKUHAI_BACKED'];
+        : honitsuCall ? 'CALL_FLUSH_SPEED'
+        : backedCall ? 'CALL_YAKUHAI_BACKED' : 'FORMAL_TENPAI_ROUTE'];
       selected = candidate;
       break;
     }

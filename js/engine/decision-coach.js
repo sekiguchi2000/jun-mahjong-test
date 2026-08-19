@@ -121,6 +121,7 @@ const PLAN_LABELS = {
   CHIITOI: '七対子',
   TOITOI: 'トイトイ（対子を刻子に育てる）',
   YAKUHAI_SECURED: '役牌確定（役はあるので最速でまとめる）',
+  FORMAL_TENPAI: '形式テンパイ（役が付けにくいのでテンパイ料が目標）',
 };
 
 const PLAN_NOTE_PHRASES = {
@@ -519,15 +520,26 @@ function readBranchParts(view, analysis) {
   return parts.slice(0, 4);
 }
 
-function planHeadlineSentences(selected) {
+function planHeadlineSentences(selected, view) {
   const planEvaluation = selected?.metrics?.planEvaluation;
   const top = planEvaluation?.topPlans?.[0];
+  const second = planEvaluation?.topPlans?.[1];
   const sentences = [];
   const strength = top ? (top.weight ?? 0) * (top.value ?? 0) : 0;
   // プランが弱い牌姿(暗刻が並ぶ手なり等)で「本線はタンヤオ・ピンフ」と
   // 嘘をつかない(カルテ27号)。役の当てが無いことを正直に言う
   if (top && PLAN_LABELS[top.code] && strength >= 0.45) {
-    sentences.push(`今の本線は${PLAN_LABELS[top.code]}です。`);
+    // 鳴き済みの手でトイトイからタンヤオへ乗り換えたときは、その切替を言う
+    // (2026-08-20ユーザー裁定②: 早くあがれそうだから切り替える、と説明する)
+    const hasPonMeld = (view?.melds ?? []).some(meld =>
+      meld?.type === 'pon' || meld?.type === 'minkan' || meld?.kanOrigin);
+    if (top.code === 'FORMAL_TENPAI') {
+      sentences.push('この手はもう役を付けにくい形です。ここからは流局時のテンパイ料を目標に、形のテンパイへ向かいます。');
+    } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
+      sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
+    } else {
+      sentences.push(`今の本線は${PLAN_LABELS[top.code]}です。`);
+    }
   } else if (top) {
     sentences.push('はっきりした役の本線はまだ無い牌姿です。まずは形のテンパイを目指し、役はリーチや途中の変化で付けます。');
   }
@@ -699,7 +711,9 @@ function turnExplanationParts(view, analysis) {
   } else if (action?.action === 'ankan') {
     sentences.push(`${Number.isInteger(action.kind) ? tileName(action.kind) : 'この牌'}の暗カンを勧めます。手の向聴も受け入れも狭めずに、ドラ表示が1枚増えて符も上がるため、得の方が大きいカンです。`);
   } else if (action?.action === 'discard') {
-    if (action.riichi) sentences.push('この牌を切ると、待ちを残したままリーチできます。');
+    if (action.riichi && metrics?.riichiEvaluation?.suppressionDeclare) {
+      sentences.push('この牌を切ってリーチします。待ちは薄めですが、相手の河にテンパイへ近づく気配があります。リーチには相手の手を止めて降ろす効果もあるので、ここは宣言して主導権を取ります。');
+    } else if (action.riichi) sentences.push('この牌を切ると、待ちを残したままリーチできます。');
     // リーチ保留 (カルテ26号): 「切る牌」と「リーチするか」は別の判断として説明する
     const riichiInfo = metrics?.riichiEvaluation;
     if (!action.riichi && riichiInfo?.holdBack) {
@@ -786,7 +800,7 @@ function turnExplanationParts(view, analysis) {
     else if (metrics.shanten === 1) sentences.push('テンパイまであと一歩の形です。');
   }
   const comparisons = action?.action === 'discard' ? comparisonParts(view, analysis) : [];
-  const planHead = action?.action === 'discard' ? planHeadlineSentences(selected) : [];
+  const planHead = action?.action === 'discard' ? planHeadlineSentences(selected, view) : [];
   // 狙い(伸ばす形)→選んだ理由→意味のある同格比較→別プランへの分岐→読み分岐、の順で読ませる
   const growth = action?.action === 'discard' ? blockGrowthSentence(view, action, metrics) : '';
   const alternatives = action?.action === 'discard' ? planAlternativeParts(view, analysis) : [];
@@ -863,6 +877,14 @@ function claimExplanationParts(view, offer, analysis) {
       candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
     return [
       `${label}を勧めます。この手は一色に染まっていて、鳴いても混一色（ホンイツ）が確定しています。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
+    ];
+  }
+  if (reason === 'FORMAL_TENPAI_ROUTE') {
+    const label = action.action === 'pon' ? 'ポン' : 'チー';
+    const selMetrics = (analysis?.candidates ?? []).find(candidate =>
+      candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
+    return [
+      `${label}を勧めます。この手はもう役を付けにくく、目標は流局時のテンパイ料です。鳴いて形のテンパイへ近づけます（${shantenLabel(selMetrics.shantenBefore)}→${shantenLabel(selMetrics.shantenAfter)}）。`,
     ];
   }
   if (reason === 'CALL_YAKUHAI_BACKED') {

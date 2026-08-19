@@ -168,6 +168,24 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     });
   }
 
+  // --- 形式テンパイ (2026-08-20ユーザー裁定①): 2副露以上で役の道が細い手は、
+  // 流局時のテンパイ料を目標に切り替える。タンヤオ遠い(么九・字が2枚以上 or
+  // 么九副露)・役牌の当てなし・染め/トイトイ/チャンタなし、が条件 ---
+  if (melds.length >= 2) {
+    const hasYakuRoute = plans.some(plan =>
+      ['YAKUHAI_SECURED', 'YAKUHAI_PAIR', 'TOITOI', 'HONITSU', 'CHANTA', 'CHIITOI'].includes(plan.code));
+    const nonSimpleInHand = handAll.filter(tile =>
+      isHonor(tile.kind) || isTerminal(tile.kind)).length;
+    const tanyaoFar = !meldAllSimple || nonSimpleInHand >= 2;
+    if (!hasYakuRoute && tanyaoFar) {
+      plans.push({ code: 'FORMAL_TENPAI', weight: 0.9, value: 0.6, notes: [] });
+      // タンヤオはまだ理論上可能でも遠い(么九2枚以上の置き換えが必要)。
+      // 本線の座は形テンに譲る
+      const tanyaoPlan = plans.find(plan => plan.code === 'TANYAO_PINFU');
+      if (tanyaoPlan) tanyaoPlan.weight *= 0.4;
+    }
+  }
+
   return plans;
 }
 
