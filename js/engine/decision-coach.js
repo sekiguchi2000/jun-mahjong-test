@@ -262,6 +262,7 @@ function pressureCautionSentence(view, analysis) {
   else if (signals.some(signal => signal.evidence?.meldCount === 1)) evidenceParts.push('副露が入っている');
   if (signals.some(signal => signal.evidence?.recentMiddleDiscards)) evidenceParts.push('河に中張牌が出始めた');
   if (signals.some(signal => signal.evidence?.flushSignal)) evidenceParts.push('一色に寄っている');
+  if (signals.some(signal => signal.evidence?.redDoraDiscard)) evidenceParts.push('赤ドラを切ってきた');
   const evidence = evidenceParts.length ? `（${evidenceParts.join('・')}）` : '';
   return `${labels.join('・')}に手が整った気配${evidence}があります。リーチはまだ入っていませんが、同じ進み方なら通りやすい牌から先に切ります。`;
 }
@@ -639,6 +640,24 @@ function turnExplanationParts(view, analysis) {
     sentences.push('今はあがれる形です。点棒と順位の条件を見ても、ここで終わらせるのが自然です。');
   } else if (action?.action === 'discard') {
     if (action.riichi) sentences.push('この牌を切ると、待ちを残したままリーチできます。');
+    // リーチ保留 (カルテ26号): 「切る牌」と「リーチするか」は別の判断として説明する
+    const riichiInfo = metrics?.riichiEvaluation;
+    if (!action.riichi && riichiInfo?.holdBack) {
+      const hold = riichiInfo.hold ?? {};
+      const growth = [];
+      if ((hold.tanyaoKinds?.length ?? 0) > 0) {
+        growth.push(`${hold.tanyaoKinds.map(kind => tileName(kind)).join('・')}を引けばタンヤオが付いてダマでもあがれる形になり`);
+      }
+      if ((hold.widenKinds?.length ?? 0) > 0) {
+        growth.push(`${hold.widenKinds.map(kind => tileName(kind)).join('・')}で待ちが広い形に育ちます`);
+      }
+      let sentence = `テンパイですが、リーチはまだ打ちません。今の待ちは残り${riichiInfo.physicalRemaining}枚と薄く、${growth.length > 0 ? growth.join('、') + '。' : ''}`;
+      if (hold.pressure) {
+        sentence += 'テンパイの気配がある相手もいて、リーチで手を固定すると降りられなくなります。';
+      }
+      sentence += '今は役が無いためロンはできませんが、形の成長を待つ判断です（効率モードなら即リーチします）。';
+      sentences.push(sentence);
+    }
     const honor = selectedHonorContext(view, action);
     const selectedPlanNotes = selected?.metrics?.planEvaluation?.notes ?? [];
     if (honor && honor.value && honor.copies === 1 && selectedPlanNotes.includes('LONE_YAKUHAI_EARLY_CUT')) {

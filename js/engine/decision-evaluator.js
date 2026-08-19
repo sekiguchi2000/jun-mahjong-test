@@ -22,18 +22,18 @@ export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 
 export const AI_STYLES = Object.freeze({
   // cautionWeight: リーチ未満の「テンパイ気配」への警戒の強さ(キャラ差は重みだけ)
-  guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3 }),
-  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0 }),
-  striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7 }),
+  guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3, riichiHoldPolicy: 'cautious' }),
+  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced' }),
+  striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7, riichiHoldPolicy: 'upgrade' }),
   // ガイドの思考モード(2026-08-19ユーザー設計、v14):
   //  攻め=高めを狙い多少のリスクは冒す / バランス=analyst相当 /
   //  守り=リスク完全回避(回す・無理なら降りる) / 効率=リスク無視の最速あがり
-  attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3 }),
-  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0 }),
-  defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8 }),
+  attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3, riichiHoldPolicy: 'upgrade' }),
+  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced' }),
+  defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8, riichiHoldPolicy: 'cautious' }),
   efficiency: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
-    cautionWeight: 0, ignoreRisk: true,
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never',
   }),
 });
 
@@ -497,6 +497,16 @@ function opponentPressureSignals(view, flushSignals) {
       score += 0.25;
       evidence.flushSignal = true;
     }
+    // 赤ドラを切る=手が完成に近い強い信号(手出しは特に。カルテ26号)
+    const redTedashi = discards.some(item => item?.tile?.red && item.tsumogiri === false);
+    const redTsumogiri = discards.some(item => item?.tile?.red && item.tsumogiri === true);
+    if (redTedashi) {
+      score += 0.5;
+      evidence.redDoraDiscard = true;
+    } else if (redTsumogiri) {
+      score += 0.3;
+      evidence.redDoraDiscard = true;
+    }
     if (score < 0.5) continue;
     signals.push({
       code: 'OPPONENT_TENPAI_PRESSURE',
@@ -689,6 +699,73 @@ function discardCandidate({
       requiredMinimum: style.riichiLiveMin,
     };
     declareRiichi = liveWaits >= style.riichiLiveMin;
+    // リーチ保留 (カルテ26号): 2筒切りテンパイでも「リーチするかは別の話」。
+    // 待ちが薄く、手に成長余地(タンヤオ化・待ちの良形化)があるか場に圧があるなら、
+    // 手を固定するリーチを控えてダマで様子を見る。効率モードだけは常に即リーチ。
+    const holdPolicy = style.riichiHoldPolicy ?? 'balanced';
+    if (declareRiichi && holdPolicy !== 'never' && liveWaits <= 4) {
+      const restCounts = toCounts(rest);
+      const waitLiveOf = counts2 => {
+        let live = 0;
+        for (let waitKind = 0; waitKind < KIND_COUNT; waitKind++) {
+          if (counts2[waitKind] >= 4) continue;
+          counts2[waitKind]++;
+          if (cachedShanten(shantenCache, counts2, meldCount) === -1) {
+            live += remainingCopies(visible, waitKind);
+          }
+          counts2[waitKind]--;
+        }
+        return live;
+      };
+      const meldsSimple = (view.melds ?? []).every(meld =>
+        (meld.tiles ?? []).every(item => item.kind < 27 && numOf(item.kind) >= 2 && numOf(item.kind) <= 8));
+      const isAllSimple = counts2 => {
+        if (!meldsSimple) return false;
+        for (let t = 0; t < KIND_COUNT; t++) {
+          if (counts2[t] > 0 && (t >= 27 || numOf(t) === 1 || numOf(t) === 9)) return false;
+        }
+        return true;
+      };
+      const tanyaoKinds = [];
+      const widenKinds = [];
+      let upgradeLive = 0;
+      for (let draw = 0; draw < KIND_COUNT; draw++) {
+        if (remainingCopies(visible, draw) === 0 || restCounts[draw] >= 4) continue;
+        restCounts[draw]++;
+        let widened = false;
+        let tanyao = false;
+        for (let out = 0; out < KIND_COUNT; out++) {
+          if (out === draw || restCounts[out] === 0) continue;
+          restCounts[out]--;
+          if (cachedShanten(shantenCache, restCounts, meldCount) === 0) {
+            if (!tanyao && isAllSimple(restCounts)) tanyao = true;
+            if (!widened && waitLiveOf(restCounts) >= liveWaits + 3) widened = true;
+          }
+          restCounts[out]++;
+          if (widened && tanyao) break;
+        }
+        restCounts[draw]--;
+        if (tanyao || widened) {
+          upgradeLive += remainingCopies(visible, draw);
+          if (tanyao) tanyaoKinds.push(draw);
+          else widenKinds.push(draw);
+        }
+      }
+      const pressure = threats.length > 0 || (context.pressureSignals?.length ?? 0) > 0;
+      const holdBack = holdPolicy === 'upgrade'
+        ? upgradeLive >= 8
+        : holdPolicy === 'balanced'
+          ? (upgradeLive >= 6 || (pressure && upgradeLive >= 3))
+          : (upgradeLive >= 4 || pressure);
+      if (holdBack) {
+        declareRiichi = false;
+        riichiEvaluation = {
+          ...riichiEvaluation,
+          holdBack: true,
+          hold: { weakWait: true, upgradeLive, tanyaoKinds, widenKinds, pressure },
+        };
+      }
+    }
   }
 
   return {
