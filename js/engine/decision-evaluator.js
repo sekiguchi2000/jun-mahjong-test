@@ -577,7 +577,9 @@ function discardCandidate({
   const doraMultiplicity = context.doraKinds.filter(kind => kind === tile.kind).length;
   const pressure = suitPressure(tile, context.flushSignals);
   const safety = assessTileSafety(tile.kind, threats, visible);
-  const utilityAdjustments = { redDiscardPenalty: tile.red ? -0.5 : 0 };
+  // 赤切りペナルティ: 2向聴以上の浮き牌整理では赤を最後まで残す(受け入れ差より
+  // 確定1翻を優先=2026-08-19実戦カルテ17号)。テンパイ・1向聴は待ちの質を優先
+  const utilityAdjustments = { redDiscardPenalty: tile.red ? (afterShanten >= 2 ? -4 : -0.5) : 0 };
   if (doraMultiplicity > 0) utilityAdjustments.doraDiscardPenalty = -0.75 * doraMultiplicity;
   if (pressure.penalty !== 0) utilityAdjustments.suitPressurePenalty = pressure.penalty;
   // 回し打ち (AI_DESIGN_V12 v12.4): リーチ相手がいて撤退条件未満(=押しモード)でも、
@@ -1222,7 +1224,11 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     // 手中に暗刻が完成しているなら、4枚目のポンは面子を壊すだけの無意味な鳴き
     // (カルテ10号: 白白白を持って4枚目の白をポンした実戦バグ)
     const ankoComplete = counts[kind] >= 3;
-    const toitoiRoute = !ankoComplete && pairs >= style.ponPairMin && counts[kind] >= 2;
+    // トイトイ名目のポンは向聴が進むときだけ(カルテ18号: 123m+1mの対子をポンして
+    // 「速くなりません」と言いながら勧めた実戦バグ。完成順子と重なる対子は骨を壊す)
+    const speedsUp = Number.isFinite(shantenAfter) && shantenAfter !== null &&
+      Number.isFinite(shantenBefore) && shantenAfter < shantenBefore;
+    const toitoiRoute = !ankoComplete && pairs >= style.ponPairMin && counts[kind] >= 2 && speedsUp;
     const pon = {
       candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true,
       allowed: !ankoComplete,
@@ -1250,10 +1256,51 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     });
   }
 
+  // 形式テンパイ (カルテ19号): 流局間際(残り8枚以下)に鳴いてテンパイへ届くなら、
+  // 「門前・リーチの道」より流局時のノーテン罰符回避を優先する
+  const liveRemaining = view.public?.remaining;
+  if (!selected && Number.isFinite(liveRemaining) && liveRemaining <= 8) {
+    const claimMeldCount = (view.melds ?? []).length;
+    const shantenNow = shanten(counts, claimMeldCount);
+    const bestAfterClaim = tilesOut => {
+      const after = counts.slice();
+      for (const outKind of tilesOut) {
+        if (after[outKind] <= 0) return null;
+        after[outKind]--;
+      }
+      let bestShanten = Infinity;
+      for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
+        if (after[discardKind] === 0) continue;
+        after[discardKind]--;
+        bestShanten = Math.min(bestShanten, shanten(after, claimMeldCount + 1));
+        after[discardKind]++;
+      }
+      return Number.isFinite(bestShanten) ? bestShanten : null;
+    };
+    if (shantenNow > 0) {
+      for (const candidate of candidates) {
+        const act = candidate.action?.action;
+        if ((act !== 'pon' && act !== 'chi') || candidate.allowed === false) continue;
+        const tilesOut = act === 'pon' ? [offer.tile.kind, offer.tile.kind] : candidate.action.tiles;
+        if (bestAfterClaim(tilesOut) === 0) {
+          candidate.utility = 950;
+          candidate.metrics = {
+            ...candidate.metrics,
+            kind: offer.tile.kind, shantenBefore: shantenNow, shantenAfter: 0,
+            remaining: liveRemaining, evaluated: true,
+          };
+          candidate.reasons = ['FORMAL_TENPAI_RACE'];
+          selected = candidate;
+          break;
+        }
+      }
+    }
+  }
+
   selected ??= pass;
   const reason = selected.reasons[0];
   const metrics = selected.metrics;
-  const legacyTrace = selected.action?.action === 'pon' ? {
+  const legacyTrace = selected.action?.action ? {
     phase: 'claim', reason, kind: metrics.kind,
     ...(reason === 'TOITOI_ROUTE' ? { pairs: metrics.pairs } : {}),
     placement,

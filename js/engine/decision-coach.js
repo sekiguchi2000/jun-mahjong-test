@@ -431,10 +431,13 @@ function readBranchParts(view, analysis) {
         const sujiSafe = detail => detail.suji &&
           !(detail.sequenceRoutes ?? []).some(route => route.possible && route.shape === 'RYANMEN');
         let safeDesc = '一番危険の低い';
+        let certainNote = '';
         if (safety?.commonGenbutsu || (details.length > 0 && details.every(detail => detail.genbutsu))) {
           safeDesc = '現物の';
         } else if (details.length > 0 && details.every(detail => detail.genbutsu || detail.noChance)) {
-          safeDesc = '当たる形のない';
+          // 当たり形の数え上げゼロ=確実な安全。「危険度が低い」とは言わず言い切る
+          safeDesc = '当たる形が一つも残っていない';
+          certainNote = '（実質の安全牌）';
         } else if (details.length > 0 && details.every(detail => detail.genbutsu || sujiSafe(detail))) {
           safeDesc = 'スジの';
         } else if (details.length > 0 && details.every(detail => detail.genbutsu || detail.ryanmenNoChance)) {
@@ -442,7 +445,7 @@ function readBranchParts(view, analysis) {
         }
         const labels = riichiSeats.map(({ seat }) => relativeSeatLabel(view, seat)).filter(Boolean).join('・');
         const cost = useSlower ? '（手は一歩遅れます）' : '';
-        parts.push(`${labels || 'リーチ者'}のリーチを重く見て回す（降りる）なら、${safeDesc}${tileName(altTile.kind, altTile.red)}へ回す選択もあります${cost}。`);
+        parts.push(`${labels || 'リーチ者'}のリーチを重く見て回す（降りる）なら、${safeDesc}${tileName(altTile.kind, altTile.red)}${certainNote}へ回す選択もあります${cost}。`);
       }
     }
   }
@@ -711,6 +714,16 @@ function claimExplanationParts(view, offer, analysis) {
     if (shantenSentence) parts.push(shantenSentence);
     parts.push('代わりにリーチと門前の役は消えます。ここは打点より速度を取る場面と判断しました。');
     return parts;
+  }
+  if (reason === 'FORMAL_TENPAI_RACE') {
+    const label = action.action === 'pon' ? 'ポン' : 'チー';
+    const remaining = analysis?.selected?.metrics?.remaining ??
+      (analysis?.candidates ?? []).find(candidate => candidate.reasons?.includes('FORMAL_TENPAI_RACE'))?.metrics?.remaining ??
+      view?.public?.remaining;
+    return [
+      `${label}を勧めます。流局が近く（残り${remaining}枚）、${claimedName}を鳴けばテンパイに届きます。`,
+      'ここからのあがりは難しくても、流局時のテンパイ・ノーテンで最大3000点の差が付きます。形式テンパイを取りにいく場面です。',
+    ];
   }
   if (action.action === 'pon' && reason === 'TOITOI_ROUTE') {
     const parts = [`ポンを勧めます。対子が${ponMetrics.pairs ?? '複数'}組あり、トイトイ（すべてを刻子でそろえる2翻役）の形です。${claimedName}を刻子にして前へ進めます。`];

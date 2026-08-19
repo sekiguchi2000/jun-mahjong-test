@@ -284,15 +284,22 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
   // ブロック骨組みボーナス (v12.1): 選ばれた5ブロックの構成牌は「手の骨」。
   // 受け入れ枚数の揺れで両面ターツ等が壊されるのを防ぐ。
   const { chosen } = decomposeBlocks(handAll, context);
+  // 余剰コピーは骨ではない: 手中の枚数がブロックで使う枚数を上回るなら、
+  // その1枚を切ってもブロックは崩れない(123m+1mの4枚目の1m等。カルテ17号)
+  const usedCopies = chosen.reduce((sum, block) =>
+    sum + block.kinds.filter(value => value === kind).length, 0);
+  const spareCopy = counts[kind] > usedCopies;
   let blockQuality = 0;
   for (const block of chosen) {
-    if (block.kinds.includes(kind)) blockQuality = Math.max(blockQuality, block.quality);
+    if (!spareCopy && block.kinds.includes(kind)) blockQuality = Math.max(blockQuality, block.quality);
   }
   if (blockQuality > 0) {
     // 完成した面子(暗刻・順子)の構成牌は原則不可侵。ターツ・雀頭はやや弱い保護
     const completeSet = chosen.some(block =>
       (block.type === 'set' || block.type === 'run') && block.kinds.includes(kind));
-    retention += completeSet ? 1.7 : blockQuality * 0.9;
+    // 両面等の質の高いターツは、対子過多手のチートイ混じり受け入れ数に負けて
+    // 壊されない程度に保護する(カルテ17号: 67pを切って対子4組へ倒れた)
+    retention += completeSet ? 1.7 : blockQuality * 1.3;
     if (completeSet || blockQuality >= 0.9) notes.add('BLOCK_CORE');
   }
 
