@@ -627,20 +627,21 @@ class UI {
       const metrics = candidate.metrics ?? {};
       const selectedMetrics = selected.metrics ?? {};
       const name = nameOf(candidate.action);
+      // 次の一手解説調: 定型の進行おさらいは書かず、分かれ目だけを言う
       let explanation;
       if (candidate === selected) {
-        explanation = `提案です。${coachProgressSentence(metrics)}`;
+        explanation = '提案の一打です。';
       } else if (Number.isInteger(metrics.shanten) && Number.isInteger(selectedMetrics.shanten) &&
           metrics.shanten > selectedMetrics.shanten) {
-        explanation = `${coachProgressSentence(metrics)} ${selectedName}を切るほうがテンパイに近づくため、${name}は選びません。`;
+        explanation = `${selectedName}を切るほうがテンパイに近づくため、${name}は選びません。`;
       } else if (Number.isFinite(metrics.ukeirePhysical) && Number.isFinite(selectedMetrics.ukeirePhysical) &&
           selectedMetrics.ukeirePhysical > metrics.ukeirePhysical) {
-        explanation = `${coachProgressSentence(metrics)} ${selectedName}を切ると${selectedMetrics.ukeirePhysical}枚になり、${selectedMetrics.ukeirePhysical - metrics.ukeirePhysical}枚多く残ります。`;
+        explanation = `${selectedName}切りより手の広がりが${selectedMetrics.ukeirePhysical - metrics.ukeirePhysical}枚分だけ狭くなります。`;
       } else if (Number.isFinite(metrics.ukeirePhysical) && Number.isFinite(selectedMetrics.ukeirePhysical) &&
           selectedMetrics.ukeirePhysical < metrics.ukeirePhysical) {
-        explanation = `${coachProgressSentence(metrics)} 形の広さだけなら${name}が上ですが、見えている価値や相手の捨て牌を優先して${selectedName}を選びます。`;
+        explanation = `形の広さだけなら${name}が上ですが、見えている価値や相手の捨て牌を優先して${selectedName}を選びます。`;
       } else {
-        explanation = `${coachProgressSentence(metrics)} この比較だけでは差が小さいため、役になりやすさや見えている危険を合わせて決めます。`;
+        explanation = '差は小さく、役になりやすさや見えている危険で分かれます。';
       }
       return { action: candidate.action, explanation };
     });
@@ -710,6 +711,25 @@ class UI {
   openCoachDetail(result = this.latestCoachResult) {
     const dialog = $('#coach-detail-dialog');
     if (!dialog || dialog.open || !result) return false;
+    this.renderCoachDetailContents(result);
+    this.activeCoachDetail = { trigger: $('#coach-more') };
+    dialog.dataset.gamepadActive = 'true';
+    try {
+      if (typeof dialog.showModal === 'function') dialog.showModal();
+      else dialog.setAttribute('open', '');
+      this.setPaused(true);
+      $('#coach-detail-close')?.focus({ preventScroll: true });
+      return true;
+    } catch (error) {
+      console.error('Coach detail dialog could not be opened.', error);
+      dialog.dataset.gamepadActive = 'false';
+      this.activeCoachDetail = null;
+      return false;
+    }
+  }
+
+  // ダイアログの中身だけを描き直す(思考モード切替時に閉じて開き直すとチラつくため)
+  renderCoachDetailContents(result) {
     const { view, offer } = this.latestCoachContext ?? {};
     $('#coach-detail-title').textContent = result.headline || '判断の理由';
     $('#coach-detail-recommendation').textContent = result.recommendation || coachActionCaption(result.action);
@@ -747,11 +767,9 @@ class UI {
         description.textContent = style.description;
         row.append(label, pick, description);
         row.addEventListener('click', () => {
+          // その場で中身だけ差し替える(閉じて開き直さない=チラつき防止)
           this.setGuideStyle(style.profile);
-          this.closeCoachDetail();
-          setTimeout(() => {
-            if (this.latestCoachResult) this.openCoachDetail(this.latestCoachResult);
-          }, 0);
+          if (this.latestCoachResult) this.renderCoachDetailContents(this.latestCoachResult);
         });
         section.appendChild(row);
       }
@@ -777,20 +795,6 @@ class UI {
       p.className = 'coach-supplement';
       p.textContent = coachCopy(paragraph);
       body.appendChild(p);
-    }
-    this.activeCoachDetail = { trigger: $('#coach-more') };
-    dialog.dataset.gamepadActive = 'true';
-    try {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-      this.setPaused(true);
-      $('#coach-detail-close')?.focus({ preventScroll: true });
-      return true;
-    } catch (error) {
-      console.error('Coach detail dialog could not be opened.', error);
-      dialog.dataset.gamepadActive = 'false';
-      this.activeCoachDetail = null;
-      return false;
     }
   }
 

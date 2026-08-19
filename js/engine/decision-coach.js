@@ -683,24 +683,18 @@ function turnExplanationParts(view, analysis) {
         if (pressureReason) sentences.push(pressureReason);
       }
     }
-    if (Number.isInteger(metrics.shanten) && Number.isFinite(metrics.ukeirePhysical)) {
-      const distance = metrics.shanten === 0
-        ? 'すでにテンパイです'
-        : metrics.shanten === 1
-          ? 'あと1枚、必要な形ができればテンパイです'
-          : 'テンパイまではまだ距離があります';
-      const acceptance = acceptanceSentence(metrics);
-      sentences.push(`${distance}。${acceptance || `次に引いて手が前に進む牌は、見えている範囲で${metrics.ukeirePhysical}枚あります。`}`);
-    }
+    // 次の一手問題の解説調(2026-08-19指定): テンパイ間近だけ短く言い、
+    // 枚数の列挙(引いて嬉しい牌・受け入れ合計)や局面の定型おさらいは書かない
+    if (metrics.shanten === 0) sentences.push('この一打でテンパイです。');
+    else if (metrics.shanten === 1) sentences.push('テンパイまであと一歩の形です。');
   }
   const comparisons = action?.action === 'discard' ? comparisonParts(view, analysis) : [];
   const planHead = action?.action === 'discard' ? planHeadlineSentences(selected) : [];
-  // 狙い(伸ばす形)→選んだ理由→受け入れ→意味のある同格比較→別プランへの分岐→状況、の順で読ませる
+  // 狙い(伸ばす形)→選んだ理由→意味のある同格比較→別プランへの分岐→読み分岐、の順で読ませる
   const growth = action?.action === 'discard' ? blockGrowthSentence(view, action, metrics) : '';
   const alternatives = action?.action === 'discard' ? planAlternativeParts(view, analysis) : [];
   const readBranches = action?.action === 'discard' ? readBranchParts(view, analysis) : [];
-  const tail = context ? [`判断時点は${phaseLabel(phaseFact?.value)}、${context}です。`] : [];
-  return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...readBranches, ...tail];
+  return [...planHead, ...(growth ? [growth] : []), ...sentences, ...comparisons, ...alternatives, ...readBranches];
 }
 
 function shantenLabel(shanten) {
