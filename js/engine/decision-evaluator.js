@@ -16,7 +16,7 @@ import {
 } from './tiles.js';
 import { shanten } from './shanten.js';
 import { canDeclareRiichi } from './legal-actions.js';
-import { evaluateHandPlans, tileRetentionValue, PLAN_SCALE } from './hand-plans.js';
+import { evaluateHandPlans, tileRetentionValue, PLAN_SCALE, decomposeBlocks } from './hand-plans.js';
 
 export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 
@@ -1269,16 +1269,46 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     // 手中に暗刻が完成しているなら、4枚目のポンは面子を壊すだけの無意味な鳴き
     // (カルテ10号: 白白白を持って4枚目の白をポンした実戦バグ)
     const ankoComplete = counts[kind] >= 3;
-    // トイトイ名目のポンは向聴が進むときだけ(カルテ18号: 123m+1mの対子をポンして
-    // 「速くなりません」と言いながら勧めた実戦バグ。完成順子と重なる対子は骨を壊す)
+    // トイトイ名目のポン (カルテ18号/23号):
+    //  ①対子数はポン・カン済みを刻子分として合算(副露が進むほど手中の対子は減る)
+    //  ②通常形の向聴かトイトイの向聴のどちらかが進むこと
+    //  ③完成順子がある手はトイトイに向かわない(123m+1mの対子ポンで骨を壊した18号)
+    //  ④チーが混ざった手はトイトイ不可能
     const speedsUp = Number.isFinite(shantenAfter) && shantenAfter !== null &&
       Number.isFinite(shantenBefore) && shantenAfter < shantenBefore;
-    const toitoiRoute = !ankoComplete && pairs >= style.ponPairMin && counts[kind] >= 2 && speedsUp;
+    const ponLikeMelds = (view.melds ?? []).filter(meld =>
+      meld?.type === 'pon' || meld?.type === 'minkan' || meld?.type === 'ankan' || meld?.kanOrigin).length;
+    const chiMelds = (view.melds ?? []).filter(meld => meld?.type === 'chi').length;
+    const toitoiShantenOf = (tileCounts, tripletMelds) => {
+      let triplets = tripletMelds;
+      let pairCount = 0;
+      for (const count of tileCounts) {
+        if (count >= 3) triplets++;
+        else if (count === 2) pairCount++;
+      }
+      const sets = Math.min(4, triplets);
+      const usablePairs = Math.min(pairCount, 4 - sets + 1);
+      return 8 - 2 * sets - usablePairs;
+    };
+    let toitoiImproves = false;
+    if (counts[kind] >= 2) {
+      const before = toitoiShantenOf(counts, ponLikeMelds);
+      const afterCounts = counts.slice();
+      afterCounts[kind] -= 2;
+      toitoiImproves = toitoiShantenOf(afterCounts, ponLikeMelds + 1) < before;
+    }
+    const { runCount } = decomposeBlocks(view.hand ?? [], {});
+    const toitoiRoute = !ankoComplete && counts[kind] >= 2 && chiMelds === 0 &&
+      (pairs + ponLikeMelds) >= style.ponPairMin && runCount === 0 &&
+      (speedsUp || toitoiImproves);
     const pon = {
       candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true,
       allowed: !ankoComplete,
       utility: ankoComplete ? -1000 : (isYakuhai ? 1000 : (toitoiRoute ? 900 : -100)),
-      metrics: { kind, isYakuhai, pairs, requiredPairs: style.ponPairMin, ankoComplete, shantenBefore, shantenAfter },
+      metrics: {
+        kind, isYakuhai, pairs, requiredPairs: style.ponPairMin, ankoComplete,
+        shantenBefore, shantenAfter, ponLikeMelds, toitoiImproves,
+      },
       reasons: [ankoComplete ? 'ANKO_ALREADY_COMPLETE'
         : (isYakuhai ? 'YAKUHAI_PON' : (toitoiRoute ? 'TOITOI_ROUTE' : 'KEEP_CLOSED'))],
     };

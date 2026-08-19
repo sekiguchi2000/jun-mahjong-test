@@ -119,6 +119,7 @@ const PLAN_LABELS = {
   CHANTA: 'チャンタ',
   CHIITOI: '七対子',
   TOITOI: 'トイトイ（対子を刻子に育てる）',
+  YAKUHAI_SECURED: '役牌確定（役はあるので最速でまとめる）',
 };
 
 const PLAN_NOTE_PHRASES = {
@@ -752,8 +753,14 @@ function claimExplanationParts(view, offer, analysis) {
     ];
   }
   if (action.action === 'pon' && reason === 'TOITOI_ROUTE') {
-    const parts = [`ポンを勧めます。対子が${ponMetrics.pairs ?? '複数'}組あり、トイトイ（すべてを刻子でそろえる2翻役）の形です。${claimedName}を刻子にして前へ進めます。`];
-    if (shantenSentence) parts.push(shantenSentence);
+    const ponCountText = (ponMetrics.ponLikeMelds ?? 0) > 0 ? `ポン${ponMetrics.ponLikeMelds}つと` : '';
+    const parts = [`ポンを勧めます。${ponCountText}対子${ponMetrics.pairs ?? '複数'}組で、トイトイ（すべてを刻子でそろえる2翻役）の形です。${claimedName}を刻子にして前へ進めます。`];
+    if (Number.isInteger(ponMetrics.shantenBefore) && Number.isInteger(ponMetrics.shantenAfter) &&
+        ponMetrics.shantenAfter < ponMetrics.shantenBefore) {
+      parts.push(`ポンすると手は${shantenLabel(ponMetrics.shantenBefore)}から${shantenLabel(ponMetrics.shantenAfter)}へ進みます。`);
+    } else if (ponMetrics.toitoiImproves) {
+      parts.push('通常の形の向聴は変わりませんが、トイトイの完成には一歩近づきます。');
+    }
     return parts;
   }
   return ['この鳴きは選べますが、点数や待ちの細部はまだ自動計算していません。理由を過大に断定せず、速度を優先する選択として表示します。'];

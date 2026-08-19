@@ -57,13 +57,26 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
   }
   const meldAllSimple = melds.every(meld =>
     (meld.tiles ?? []).every(tile => !isHonor(tile.kind) && !isTerminal(tile.kind)));
-  const tanyaoRatio = total > 0 ? (simpleCount + (meldAllSimple ? melds.length * 3 : 0)) / total : 0;
-  plans.push({
-    code: 'TANYAO_PINFU',
-    weight: Math.max(0.35, Math.min(1, tanyaoRatio * 1.15)),
-    value: 1 + 0.3 * redCount,
-    notes: redCount > 0 ? ['RED5_IN_HAND'] : [],
+  // 字牌・么九牌を副露した手はタンヤオ不可能(カルテ23号: 西・東ポン後に
+  // 「本線はタンヤオ・ピンフ系」と言った実戦バグ)。基本線は他プランに譲る
+  if (melds.length === 0 || meldAllSimple) {
+    const tanyaoRatio = total > 0 ? (simpleCount + (meldAllSimple ? melds.length * 3 : 0)) / total : 0;
+    plans.push({
+      code: 'TANYAO_PINFU',
+      weight: Math.max(0.35, Math.min(1, tanyaoRatio * 1.15)),
+      value: 1 + 0.3 * redCount,
+      notes: redCount > 0 ? ['RED5_IN_HAND'] : [],
+    });
+  }
+  // --- 役牌確定: 役牌のポン/カンが既にある手は役の心配なし=最速でまとめる ---
+  const securedYakuhai = melds.some(meld => {
+    const kind = meld.tiles?.[0]?.kind;
+    return kind !== undefined && (meld.tiles?.length ?? 0) >= 3 &&
+      meld.tiles.every(tile => tile.kind === kind) && isValueHonorKind(kind, context);
   });
+  if (securedYakuhai) {
+    plans.push({ code: 'YAKUHAI_SECURED', weight: 1, value: 1, notes: [] });
+  }
 
   // --- 役牌: 対子以上のときだけ速度プランとして立てる ---
   for (let kind = 27; kind < KIND_COUNT; kind++) {
@@ -130,11 +143,13 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
   // --- トイトイ: ポン系副露があり対子が並ぶ手 (カルテ8号) ---
   const ponMelds = melds.filter(meld =>
     meld?.type === 'pon' || meld?.type === 'minkan' || meld?.kanOrigin).length;
-  if (ponMelds >= 1 && pairKinds.length >= 3) {
+  // 副露が進むほど手中の対子は減るので、ポン数を刻子分として合算して判定する
+  // (カルテ23号: 西・1筒・東と3ポンした手でトイトイを見失った)
+  if (ponMelds >= 1 && ponMelds + pairKinds.length >= 4) {
     plans.push({
       code: 'TOITOI',
       pairKinds,
-      weight: Math.min(1, 0.35 + 0.2 * (ponMelds - 1) + 0.15 * (pairKinds.length - 3)),
+      weight: Math.min(1, 0.35 + 0.2 * (ponMelds - 1) + 0.15 * Math.max(0, pairKinds.length - 3)),
       value: 1.5,
       notes: [],
     });
