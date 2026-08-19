@@ -1,8 +1,10 @@
 /* are-report-v1.css — 「あれ?」ボタン(違和感レポート) */
 .are-report-button {
   position: fixed;
-  top: 64px;
-  right: 10px;
+  /* ポーズボタン(top=max(8px,セーフエリア)・高さ44px+余白)の真下に追従させる。
+     固定64pxだとノッチ端末でポーズが下がった分だけ重なる(2026-08-19指摘) */
+  top: calc(max(8px, env(safe-area-inset-top)) + 58px);
+  right: max(10px, env(safe-area-inset-right));
   z-index: 95;
   appearance: none;
   border: 1px solid rgba(214, 178, 94, 0.55);
@@ -23,8 +25,8 @@
 
 .are-report-hint {
   position: fixed;
-  top: 106px;
-  right: 10px;
+  top: calc(max(8px, env(safe-area-inset-top)) + 100px);
+  right: max(10px, env(safe-area-inset-right));
   z-index: 95;
   max-width: 230px;
   background: rgba(10, 20, 32, 0.95);
