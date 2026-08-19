@@ -583,9 +583,14 @@ class UI {
     const selectedId = analysis?.selected?.candidateId;
     const selected = (analysis?.candidates ?? []).find(candidate => candidate.candidateId === selectedId);
     if (!selected || selected.action?.action !== 'discard') return [];
+    const handAll = view?.drawn ? [...(view.hand ?? []), view.drawn] : [...(view?.hand ?? [])];
+    // リーチが入っている局面は攻め基準(同向聴・受け入れ拮抗)の絞り込みをやめ、
+    // 全候補を安全度順に並べて危険度の根拠を言う(2026-08-19指摘: 白が消えていた)
+    const underRiichi = (view?.public?.players ?? []).some((player, seat) =>
+      seat !== view.me && player?.riichi);
+    if (underRiichi) return this.coachSafetyComparisonRows(analysis, selected, handAll);
     // 有効な候補だけを比較に載せる: 提案 + 同向聴で受け入れが拮抗する牌(差2枚以内)。
     // 向聴が悪化する牌・大差で劣る牌・同一牌の重複は省く。
-    const handAll = view?.drawn ? [...(view.hand ?? []), view.drawn] : [...(view?.hand ?? [])];
     const seenTiles = new Set();
     const alternatives = [];
     const sortedCandidates = (analysis?.candidates ?? [])
@@ -633,6 +638,58 @@ class UI {
       }
       return { action: candidate.action, explanation };
     });
+  }
+
+  // リーチ下の比較: 全候補を危険度の低い順に、安全根拠と手への影響で説明する
+  coachSafetyComparisonRows(analysis, selected, handAll) {
+    const riskOf = candidate => {
+      const risk = candidate?.metrics?.safety?.maxRisk;
+      return Number.isFinite(risk) ? risk : Number.POSITIVE_INFINITY;
+    };
+    const safetyPhrase = candidate => {
+      const details = candidate?.metrics?.safety?.perThreatDetails ?? [];
+      if (details.length === 0) return '';
+      if (details.every(detail => detail.genbutsu)) return '現物なので、当たりません。';
+      if (details.every(detail => detail.genbutsu || detail.noChance)) {
+        return '当たる形が一つも残っていません（実質の安全牌）。';
+      }
+      const sujiSafe = detail => detail.suji &&
+        !(detail.sequenceRoutes ?? []).some(route => route.possible && route.shape === 'RYANMEN');
+      if (details.every(detail => detail.genbutsu || sujiSafe(detail))) {
+        return 'スジなので、両面待ちには当たりません。';
+      }
+      if (details.every(detail => detail.genbutsu || (detail.sequenceRoutes ?? []).length === 0)) {
+        return '字牌なので、当たるとしてもシャンポンか単騎だけです。';
+      }
+      if (details.every(detail => detail.genbutsu || detail.oneChance)) {
+        return '当たり方は一形しか残っていません。';
+      }
+      return '無筋なので、当たる可能性があります。';
+    };
+    const seenTiles = new Set();
+    const rows = [];
+    const ordered = (analysis?.candidates ?? [])
+      .filter(candidate => candidate.action?.action === 'discard')
+      .sort((left, right) => (right === selected) - (left === selected) || (riskOf(left) - riskOf(right)));
+    for (const candidate of ordered) {
+      const tile = Number.isInteger(candidate.action?.index) ? handAll[candidate.action.index] : null;
+      const key = tile ? `${tile.kind}:${tile.red ? 1 : 0}` : candidate.candidateId;
+      if (seenTiles.has(key)) continue;
+      seenTiles.add(key);
+      const safety = safetyPhrase(candidate);
+      const shanten = candidate.metrics?.shanten;
+      const selectedShanten = selected.metrics?.shanten;
+      let impact = '';
+      if (Number.isInteger(shanten) && Number.isInteger(selectedShanten)) {
+        impact = shanten === selectedShanten
+          ? ' 手の進みは提案と同じです。'
+          : ` 切ると手は${shanten - selectedShanten}歩遠くなります。`;
+      }
+      const head = candidate === selected ? '提案です。' : '';
+      rows.push({ action: candidate.action, explanation: `${head}${safety}${impact}`.trim() });
+      if (rows.length >= 8) break;
+    }
+    return rows;
   }
 
   openCoachDetail(result = this.latestCoachResult) {
