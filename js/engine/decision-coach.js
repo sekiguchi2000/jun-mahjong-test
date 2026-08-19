@@ -740,15 +740,38 @@ function claimExplanationParts(view, offer, analysis) {
     if (reason === 'ANKO_ALREADY_COMPLETE' || ponMetrics.ankoComplete) {
       return [`スルーを勧めます。${claimedName}は手の中で3枚そろっていて、すでに面子として完成しています。ここで鳴くと完成形を崩すだけです。`];
     }
-    const improves = Number.isInteger(ponMetrics.shantenBefore) && Number.isInteger(ponMetrics.shantenAfter) &&
-      ponMetrics.shantenAfter < ponMetrics.shantenBefore;
+    // 「鳴けば速い」ことは認めた上で、なぜ鳴かないかの天秤を明言する(カルテ25号)
+    const passMetrics = (analysis?.candidates ?? []).find(candidate =>
+      candidate.candidateId === 'pass')?.metrics ?? {};
+    const improves = Number.isInteger(passMetrics.bestClaimShanten) &&
+      Number.isInteger(passMetrics.shantenBefore) &&
+      passMetrics.bestClaimShanten < passMetrics.shantenBefore;
     const parts = improves
-      ? [`スルー（鳴かない）を勧めます。${claimedName}をポンすれば${shantenLabel(ponMetrics.shantenAfter)}まで進みますが、確実な役が付かず、安い手か役無しになりがちです。`]
-      : [`スルー（鳴かない）を勧めます。${claimedName}を鳴いても、確実な役や速度の得が見込めません。${shantenSentence}`.trim()];
+      ? [`スルー（鳴かない）を勧めます。${claimedName}を鳴けば${shantenLabel(passMetrics.shantenBefore)}から${shantenLabel(passMetrics.bestClaimShanten)}へ速くなるのは見えています。ただ、この手はタンヤオ圏でも役牌バック（役牌の対子持ち）でもないため、鳴くと役の当てが薄く、安手か役無しになりがちです。`]
+      : [`スルー（鳴かない）を勧めます。${claimedName}を鳴いても向聴が進まず、速度の得がありません。${shantenSentence}`.trim()];
     parts.push((view?.melds?.length ?? 0) > 0
       ? 'すでに副露している手ですが、この鳴きには得がありません。手の自由度を保って自分のツモで進めます。'
-      : '鳴くと手の形が固定され、リーチ（と裏ドラ）の道も消えます。門前のまま自分のツモで進めるほうが打点を狙えます。');
+      : '面前のまま進めばリーチ（と裏ドラ）で打点が見えるため、ここは速度より役と打点を取ります。');
     return parts;
+  }
+  if (reason === 'CALL_TANYAO_SPEED') {
+    const label = action.action === 'pon' ? 'ポン' : 'チー';
+    const selMetrics = (analysis?.candidates ?? []).find(candidate =>
+      candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
+    return [
+      `${label}を勧めます。鳴いてもタンヤオが確定圏なので役は消えません。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
+      '代わりにリーチ・裏ドラは消えるので、打点より速度を取る判断です。',
+    ];
+  }
+  if (reason === 'CALL_YAKUHAI_BACKED') {
+    const label = action.action === 'pon' ? 'ポン' : 'チー';
+    const selMetrics = (analysis?.candidates ?? []).find(candidate =>
+      candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
+    const backedName = Number.isInteger(selMetrics.backedKind) ? tileName(selMetrics.backedKind) : '役牌';
+    return [
+      `${label}を勧めます。手に${backedName}の対子があり、鳴いても役の当てが残ります（役牌バック）。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
+      `${backedName}が最後まで鳴けない・引けないと役無しの危険が残る点だけ注意です。`,
+    ];
   }
   if (action.action === 'pon' && reason === 'YAKUHAI_PON') {
     const parts = [`ポンを勧めます。${claimedName}は役牌なので、鳴いた時点で役（1翻）が確定し、あがりの資格を失いません。`];

@@ -187,8 +187,26 @@ export class BrowserAudioBackend {
     media.addEventListener?.('ended', ended);
     media.addEventListener?.('error', failed);
 
+    // iOS Safariは<audio>のvolumeプロパティを無視する(常に1)ため、
+    // 可能ならWebAudioのゲインノードを経由させて音量を効かせる(2026-08-19指摘:
+    // BGMを最小にしても鳴り続けた)。WebAudioが無い環境はmedia.volumeへフォールバック
+    let gainNode = null;
+    if (typeof this.AudioContextCtor === 'function' &&
+        typeof media.constructor === 'function' && typeof globalThis.document !== 'undefined') {
+      try {
+        this.context ??= new this.AudioContextCtor();
+        const sourceNode = this.context.createMediaElementSource(media);
+        gainNode = this.context.createGain();
+        sourceNode.connect(gainNode);
+        gainNode.connect(this.context.destination);
+      } catch { gainNode = null; }
+    }
+
     return {
-      play: () => Promise.resolve(media.play?.()),
+      play: () => {
+        if (gainNode && this.context?.state === 'suspended') this.context.resume().catch(() => {});
+        return Promise.resolve(media.play?.());
+      },
       pause: () => media.pause?.(),
       stop: () => {
         stopped = true;
@@ -198,8 +216,13 @@ export class BrowserAudioBackend {
         media.removeEventListener?.('error', failed);
         media.removeAttribute?.('src');
         media.load?.();
+        try { gainNode?.disconnect(); } catch { /* 二重切断は無害 */ }
       },
-      setVolume: value => { media.volume = clamp(Number(value) || 0, 0, 1); },
+      setVolume: value => {
+        const volume = clamp(Number(value) || 0, 0, 1);
+        if (gainNode) { try { gainNode.gain.value = volume; } catch { /* no-op */ } }
+        try { media.volume = volume; } catch { /* iOSでは読み取り専用 */ }
+      },
     };
   }
 

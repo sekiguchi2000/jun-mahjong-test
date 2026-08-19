@@ -1331,27 +1331,28 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     });
   }
 
+  const liveRemaining = view.public?.remaining;
+  const claimMeldCount = (view.melds ?? []).length;
+  const shantenNow = shanten(counts, claimMeldCount);
+  const bestAfterClaim = tilesOut => {
+    const after = counts.slice();
+    for (const outKind of tilesOut) {
+      if (after[outKind] <= 0) return null;
+      after[outKind]--;
+    }
+    let bestShanten = Infinity;
+    for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
+      if (after[discardKind] === 0) continue;
+      after[discardKind]--;
+      bestShanten = Math.min(bestShanten, shanten(after, claimMeldCount + 1));
+      after[discardKind]++;
+    }
+    return Number.isFinite(bestShanten) ? bestShanten : null;
+  };
+
   // 形式テンパイ (カルテ19号): 流局間際(残り8枚以下)に鳴いてテンパイへ届くなら、
   // 「門前・リーチの道」より流局時のノーテン罰符回避を優先する
-  const liveRemaining = view.public?.remaining;
   if (!selected && Number.isFinite(liveRemaining) && liveRemaining <= 8) {
-    const claimMeldCount = (view.melds ?? []).length;
-    const shantenNow = shanten(counts, claimMeldCount);
-    const bestAfterClaim = tilesOut => {
-      const after = counts.slice();
-      for (const outKind of tilesOut) {
-        if (after[outKind] <= 0) return null;
-        after[outKind]--;
-      }
-      let bestShanten = Infinity;
-      for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
-        if (after[discardKind] === 0) continue;
-        after[discardKind]--;
-        bestShanten = Math.min(bestShanten, shanten(after, claimMeldCount + 1));
-        after[discardKind]++;
-      }
-      return Number.isFinite(bestShanten) ? bestShanten : null;
-    };
     if (shantenNow > 0) {
       for (const candidate of candidates) {
         const act = candidate.action?.action;
@@ -1370,6 +1371,58 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
         }
       }
     }
+  }
+
+  // 鳴きの速度評価 (カルテ25号): 鳴いて向聴が進み、かつ役の当てが確かなら勧める。
+  //  ①タンヤオ圏: 鳴く牌が中張で、副露も手もタンヤオを保てる(残る么九・字は1枚まで)
+  //  ②役牌バック: 手に役牌の対子が残る(鳴いた後も役の当てがある)
+  // どちらも無い「役の当てが薄い速度だけの鳴き」は従来どおりスルー(理由は明言する)
+  if (!selected) {
+    const simpleKind = kindValue => kindValue < 27 && numOf(kindValue) >= 2 && numOf(kindValue) <= 8;
+    const handNonSimple = (view.hand ?? []).filter(tile => !simpleKind(tile.kind)).length;
+    const meldsAllSimple = (view.melds ?? []).every(meld =>
+      (meld.tiles ?? []).every(tile => simpleKind(tile.kind)));
+    let backedKind = null;
+    for (let honorKind = 27; honorKind < KIND_COUNT; honorKind++) {
+      const isYakuhaiKind = isDragon(honorKind) || honorKind === view.seatWind || honorKind === view.roundWind;
+      if (isYakuhaiKind && counts[honorKind] >= 2) { backedKind = honorKind; break; }
+    }
+    for (const candidate of candidates) {
+      const act = candidate.action?.action;
+      if ((act !== 'pon' && act !== 'chi') || candidate.allowed === false) continue;
+      const claimTiles = act === 'pon' ? [offer.tile.kind, offer.tile.kind] : candidate.action.tiles;
+      const afterBest = bestAfterClaim(claimTiles);
+      if (afterBest === null || afterBest >= shantenNow) continue;
+      const claimedAllSimple = simpleKind(offer.tile.kind) && claimTiles.every(simpleKind);
+      const tanyaoCall = claimedAllSimple && meldsAllSimple && handNonSimple <= 1 && shantenNow <= 3;
+      const backedCall = backedKind !== null && shantenNow <= 2;
+      if (!tanyaoCall && !backedCall) continue;
+      candidate.utility = 800;
+      candidate.metrics = {
+        ...candidate.metrics,
+        kind: offer.tile.kind, shantenBefore: shantenNow, shantenAfter: afterBest,
+        backedKind: tanyaoCall ? null : backedKind, evaluated: true,
+      };
+      candidate.reasons = [tanyaoCall ? 'CALL_TANYAO_SPEED' : 'CALL_YAKUHAI_BACKED'];
+      selected = candidate;
+      break;
+    }
+  }
+
+  // スルーの説明用: 鳴けばどれだけ速くなったかを常に記録する
+  // (「鳴けば速い」ことは見えている、と明言してから理由を言うため)
+  if (!selected) {
+    let bestClaimShanten = null;
+    for (const candidate of candidates) {
+      const act = candidate.action?.action;
+      if (act !== 'pon' && act !== 'chi') continue;
+      const claimTiles = act === 'pon' ? [offer.tile.kind, offer.tile.kind] : candidate.action.tiles;
+      const afterBest = bestAfterClaim(claimTiles);
+      if (afterBest !== null && (bestClaimShanten === null || afterBest < bestClaimShanten)) {
+        bestClaimShanten = afterBest;
+      }
+    }
+    pass.metrics = { ...pass.metrics, shantenBefore: shantenNow, bestClaimShanten };
   }
 
   selected ??= pass;

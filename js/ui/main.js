@@ -35,7 +35,7 @@ import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
-import { AudioDirector } from './audio-director.js?v=18';
+import { AudioDirector } from './audio-director.js?v=19';
 import { classifyWinPresentation, winCinematicCopy, winSuspenseDuration } from './win-presentation.js?v=3';
 import {
   AUDIO_MANIFEST, CHARACTER_AUDIO_IDS, selectThoughtVoiceId,
