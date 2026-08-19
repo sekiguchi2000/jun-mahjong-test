@@ -31,6 +31,7 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { presentReviewDecision, presentThought } from './decision-presenter.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.js?v=5';
+import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
@@ -331,8 +332,13 @@ class UI {
     this.activeThoughtDetail = null;
     this.activeCoachDetail = null;
     this.latestCoachResult = null;
-    this.latestCoachContext = { view: null, offer: null };
+    this.latestCoachContext = { view: null, offer: null, options: null };
     this.coachCollapsed = false;
+    // ガイドの思考モード (2026-08-19ユーザー設計): attack/balance/defense/efficiency
+    this.guideStyle = (() => {
+      const saved = localStorage.getItem('jun-guide-style-v1');
+      return GUIDE_STYLES.some(style => style.profile === saved) ? saved : 'balance';
+    })();
     this.finishThoughtOnResume = false;
     this.activeRiichiCancel = null;
     this.activeHandBack = null;
@@ -710,6 +716,47 @@ class UI {
     this.renderCoachTiles($('#coach-detail-tile-visual'), result.action, view, offer);
     const body = $('#coach-detail-body');
     body.replaceChildren();
+    // 思考モード別のおすすめ: 4モードそれぞれの推奨を並べ、タップでメイン思考を切替
+    if (view) {
+      const section = document.createElement('div');
+      section.className = 'coach-style-board';
+      const heading = document.createElement('p');
+      heading.className = 'coach-style-heading';
+      heading.textContent = '思考モード別のおすすめ（タップでメイン思考を切替）';
+      section.appendChild(heading);
+      const { options } = this.latestCoachContext ?? {};
+      for (const style of GUIDE_STYLES) {
+        let recommendation = '—';
+        try {
+          const styled = offer
+            ? buildClaimCoaching(view, offer, style.profile)
+            : buildTurnCoaching(view, options ?? ['discard'], style.profile);
+          recommendation = styled.recommendation || coachActionCaption(styled.action);
+        } catch { /* 未対応局面は伏せる */ }
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'coach-style-row' + (style.profile === this.guideStyle ? ' current' : '');
+        const label = document.createElement('span');
+        label.className = 'coach-style-label';
+        label.textContent = style.label;
+        const pick = document.createElement('span');
+        pick.className = 'coach-style-pick';
+        pick.textContent = recommendation;
+        const description = document.createElement('span');
+        description.className = 'coach-style-description';
+        description.textContent = style.description;
+        row.append(label, pick, description);
+        row.addEventListener('click', () => {
+          this.setGuideStyle(style.profile);
+          this.closeCoachDetail();
+          setTimeout(() => {
+            if (this.latestCoachResult) this.openCoachDetail(this.latestCoachResult);
+          }, 0);
+        });
+        section.appendChild(row);
+      }
+      body.appendChild(section);
+    }
     const rows = this.coachComparisonRows(result, view, offer);
     for (const row of rows) {
       const entry = document.createElement('div');
@@ -1372,11 +1419,38 @@ class UI {
     void this.audio.playVoice(`${character}.${cue}`, { critical });
   }
 
-  showCoach(result, { view = null, offer = null } = {}) {
+  guideStyleInfo(profile = this.guideStyle) {
+    return GUIDE_STYLES.find(style => style.profile === profile) ?? GUIDE_STYLES[1];
+  }
+
+  setGuideStyle(profile) {
+    if (!GUIDE_STYLES.some(style => style.profile === profile)) return;
+    this.guideStyle = profile;
+    localStorage.setItem('jun-guide-style-v1', profile);
+    const badge = $('#coach-style');
+    if (badge) badge.textContent = this.guideStyleInfo().label;
+    // 表示中のガイドを新しい思考で作り直す
+    const { view, offer, options } = this.latestCoachContext ?? {};
+    if (view && offer) this.showCoachClaim(view, offer);
+    else if (view) this.showCoachTurn(view, options ?? ['discard']);
+  }
+
+  cycleGuideStyle() {
+    const index = GUIDE_STYLES.findIndex(style => style.profile === this.guideStyle);
+    const next = GUIDE_STYLES[(index + 1) % GUIDE_STYLES.length];
+    this.setGuideStyle(next.profile);
+  }
+
+  showCoach(result, { view = null, offer = null, options = null } = {}) {
     const panel = $('#coach-panel');
     if (!panel || !result) return;
     this.latestCoachResult = result;
-    this.latestCoachContext = { view, offer };
+    this.latestCoachContext = { view, offer, options };
+    const badge = $('#coach-style');
+    if (badge) {
+      badge.textContent = this.guideStyleInfo().label;
+      badge.onclick = () => this.cycleGuideStyle();
+    }
     $('#coach-title').textContent = result.phase === 'claim' ? '鳴くかどうか' : '何を選ぶか';
     $('#coach-recommendation').textContent = result.recommendation || coachActionCaption(result.action);
     $('#coach-explanation').textContent = coachCopy(result.headline || result.explanation);
@@ -1398,7 +1472,7 @@ class UI {
       return;
     }
     try {
-      this.showCoach(buildTurnCoaching(view, options, 'analyst'), { view });
+      this.showCoach(buildTurnCoaching(view, options, this.guideStyle), { view, options });
     } catch (error) {
       console.warn('Coach mode skipped an unsupported turn.', error);
       this.hideCoach();
@@ -1411,7 +1485,7 @@ class UI {
       return;
     }
     try {
-      this.showCoach(buildClaimCoaching(view, offer, 'analyst'), { view, offer });
+      this.showCoach(buildClaimCoaching(view, offer, this.guideStyle), { view, offer });
     } catch (error) {
       console.warn('Coach mode skipped an unsupported claim.', error);
       this.hideCoach();
@@ -1425,7 +1499,7 @@ class UI {
     panel.classList.add('hidden');
     panel.removeAttribute('data-phase');
     this.latestCoachResult = null;
-    this.latestCoachContext = { view: null, offer: null };
+    this.latestCoachContext = { view: null, offer: null, options: null };
   }
 
   playThoughtVoice(actor, analysis) {

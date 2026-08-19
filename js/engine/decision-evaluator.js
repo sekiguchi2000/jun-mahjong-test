@@ -25,7 +25,24 @@ export const AI_STYLES = Object.freeze({
   guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3 }),
   analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0 }),
   striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7 }),
+  // ガイドの思考モード(2026-08-19ユーザー設計、v14):
+  //  攻め=高めを狙い多少のリスクは冒す / バランス=analyst相当 /
+  //  守り=リスク完全回避(回す・無理なら降りる) / 効率=リスク無視の最速あがり
+  attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3 }),
+  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0 }),
+  defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8 }),
+  efficiency: Object.freeze({
+    foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
+    cautionWeight: 0, ignoreRisk: true,
+  }),
 });
+
+export const GUIDE_STYLES = Object.freeze([
+  { profile: 'attack', label: '攻め', description: '高めを狙い、多少のリスクは冒す' },
+  { profile: 'balance', label: 'バランス', description: '攻めと守りの中間。手の価値と危険を天秤にかける' },
+  { profile: 'defense', label: '守り', description: '手の価値よりリスクが高ければ回す。無理なら降りる' },
+  { profile: 'efficiency', label: '効率', description: '危険は無視して、最も効率よくあがりに向かう' },
+]);
 
 const WIN_PREVIEW_KEYS = Object.freeze([
   'winner', 'loser', 'beforeRank', 'afterRank', 'beforePoints', 'afterPoints',
@@ -583,7 +600,7 @@ function discardCandidate({
   // 確定1翻を優先=2026-08-19実戦カルテ17号)。テンパイ・1向聴は待ちの質を優先
   const utilityAdjustments = { redDiscardPenalty: tile.red ? (afterShanten >= 2 ? -4 : -0.5) : 0 };
   if (doraMultiplicity > 0) utilityAdjustments.doraDiscardPenalty = -0.75 * doraMultiplicity;
-  if (pressure.penalty !== 0) utilityAdjustments.suitPressurePenalty = pressure.penalty;
+  if (pressure.penalty !== 0 && !style.ignoreRisk) utilityAdjustments.suitPressurePenalty = pressure.penalty;
   // 回し打ち (AI_DESIGN_V12 v12.4): リーチ相手がいて撤退条件未満(=押しモード)でも、
   // 危険度を効用に算入する。テンパイに近いほど押し、遠いほど安全牌で回す。
   // 「無筋を通すチャレンジ」は見返り(テンパイ・打点必要状況)があるときに限る。
@@ -640,8 +657,10 @@ function discardCandidate({
         valueBias,
         valueBiasCode: context.planContext?.valueBiasCode ?? 'NEUTRAL',
       };
+      // 攻めモードはプラン(高め)の重みを増す。効率モードは等倍(あがりに必要な役は保つ)
+      const stylePlanWeight = style.planWeight ?? 1;
       utilityAdjustments.planRetention =
-        -(PLAN_SCALE * deepShantenBoost * planEvaluation.retention * tenpaiAttenuation * valueBias);
+        -(PLAN_SCALE * deepShantenBoost * planEvaluation.retention * tenpaiAttenuation * valueBias * stylePlanWeight);
     }
   }
   const utilityAdjustment = Object.values(utilityAdjustments)

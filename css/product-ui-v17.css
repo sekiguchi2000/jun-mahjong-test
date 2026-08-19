@@ -740,3 +740,70 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
   .seat-thought-more,
   .thought-detail-footer button { transition: none; }
 }
+
+/* ---------- ガイド思考モード (v14, 2026-08-19) ---------- */
+.coach-style {
+  appearance: none;
+  border: 1px solid rgba(214, 178, 94, 0.6);
+  border-radius: 999px;
+  background: rgba(24, 40, 58, 0.85);
+  color: #e8d9ac;
+  font: 700 12px/1 var(--v16-font-body, inherit);
+  padding: 5px 10px;
+  margin-left: auto;
+  margin-right: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.coach-style:active { transform: translateY(1px); }
+.coach-style-board {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(214, 178, 94, 0.25);
+}
+.coach-style-heading {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #b9c6cf;
+}
+.coach-style-row {
+  appearance: none;
+  display: grid;
+  grid-template-columns: 5.2em 1fr;
+  grid-template-areas: 'label pick' 'label description';
+  gap: 2px 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid rgba(214, 178, 94, 0.25);
+  border-radius: 10px;
+  background: rgba(12, 22, 34, 0.6);
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.coach-style-row.current {
+  border-color: rgba(214, 178, 94, 0.85);
+  background: rgba(38, 56, 76, 0.85);
+}
+.coach-style-label {
+  grid-area: label;
+  font-weight: 700;
+  color: #e8d9ac;
+}
+.coach-style-row.current .coach-style-label::after {
+  content: ' ●';
+  font-size: 0.7em;
+  color: #9fd48f;
+}
+.coach-style-pick {
+  grid-area: pick;
+  font-weight: 700;
+}
+.coach-style-description {
+  grid-area: description;
+  font-size: 0.74rem;
+  color: #9fb0bb;
+}
