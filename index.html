@@ -63,30 +63,10 @@
         <div class="title-setup-body">
           <fieldset class="learning-mode-picker">
             <legend>LEARNING TABLE</legend>
-            <label class="learning-mode-option" for="review-mode-toggle">
-              <span class="learning-mode-copy"><strong>局後感想戦</strong><small>あなたの全判断を3人が採点</small></span>
-              <input id="review-mode-toggle" type="checkbox" role="switch">
-              <span class="learning-switch" aria-hidden="true"></span>
-            </label>
-            <label class="learning-mode-option" for="thought-mode-toggle">
-              <span class="learning-mode-copy"><strong>思考公開</strong><small>COMの判断根拠を対局中に表示</small></span>
-              <input id="thought-mode-toggle" type="checkbox" role="switch">
-              <span class="learning-switch" aria-hidden="true"></span>
-            </label>
             <label class="learning-mode-option" for="coach-mode-toggle">
               <span class="learning-mode-copy"><strong>打ち手ガイド</strong><small>あなたと同じ公開情報だけで選択を解説</small></span>
               <input id="coach-mode-toggle" type="checkbox" role="switch">
               <span class="learning-switch" aria-hidden="true"></span>
-            </label>
-            <label class="learning-duration-option" for="thought-duration-select">
-              <span><strong>思考表示時間</strong><small>読み終えるまで対局を止めます</small></span>
-              <select id="thought-duration-select" aria-label="思考公開の表示時間">
-                <option value="3">3秒</option>
-                <option value="6">6秒</option>
-                <option value="10" selected>10秒</option>
-                <option value="15">15秒</option>
-                <option value="manual">手動送り</option>
-              </select>
             </label>
           </fieldset>
           <button id="btn-rules" class="btn big">ルール設定</button>
@@ -150,36 +130,6 @@
       <div class="chip bl" id="chip-0"></div>
       <div class="chip br" id="chip-1"></div>
 
-      <aside id="thought-seat-1" class="seat-thought seat-1 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
-        <span class="seat-thought-speaker">半蔵の思考</span>
-        <strong class="seat-thought-headline">公開情報を照合中</strong>
-        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
-        <div class="seat-thought-metrics"></div>
-        <div class="seat-thought-actions">
-          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
-          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
-        </div>
-      </aside>
-      <aside id="thought-seat-2" class="seat-thought seat-2 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
-        <span class="seat-thought-speaker">ジョーの思考</span>
-        <strong class="seat-thought-headline">公開情報を照合中</strong>
-        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
-        <div class="seat-thought-metrics"></div>
-        <div class="seat-thought-actions">
-          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
-          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
-        </div>
-      </aside>
-      <aside id="thought-seat-3" class="seat-thought seat-3 hidden" data-gamepad-scope="thought" data-gamepad-active="false" aria-live="polite" aria-atomic="true">
-        <span class="seat-thought-speaker">ひめ子の思考</span>
-        <strong class="seat-thought-headline">公開情報を照合中</strong>
-        <p class="seat-thought-body">河・点棒・受入枚数を確認しています。</p>
-        <div class="seat-thought-metrics"></div>
-        <div class="seat-thought-actions">
-          <button class="seat-thought-more hidden" type="button" aria-haspopup="dialog" aria-controls="thought-detail-dialog">続きを読む</button>
-          <button class="seat-thought-skip" type="button" data-gamepad-default>次へ</button>
-        </div>
-      </aside>
 
       <section id="dealer-ceremony" class="dealer-ceremony hidden" role="status" aria-live="polite" aria-atomic="true">
         <div class="dealer-ceremony-banner">
@@ -244,33 +194,6 @@
 
 </div>
 
-<dialog id="review-dialog" aria-labelledby="review-title" data-gamepad-scope="review">
-  <section class="review-shell">
-    <header class="review-header">
-      <div><small>ROUND REVIEW</small><h2 id="review-title">局後感想戦</h2></div>
-      <div class="review-summary"><span>総合</span><strong id="review-overall-score">—</strong><small id="review-progress">0 / 0</small></div>
-    </header>
-    <div class="review-workspace">
-      <nav class="review-timeline" aria-label="あなたの打牌一覧">
-        <p>DECISION LOG</p>
-        <ol id="review-timeline-list"></ol>
-      </nav>
-      <main class="review-analysis">
-        <div class="review-choice-block">
-          <span id="review-decision-number" class="review-eyebrow">判断 —</span>
-          <h3 id="review-choice">—</h3>
-          <p id="review-recommendation">評価を準備しています。</p>
-        </div>
-        <div id="review-comments" class="review-comments"></div>
-      </main>
-    </div>
-    <footer class="review-footer">
-      <button id="review-prev" class="review-nav" type="button" data-gamepad-prev>前の判断</button>
-      <button id="review-close" class="review-close" type="button" data-gamepad-back data-gamepad-default>卓へ戻る</button>
-      <button id="review-next" class="review-nav" type="button" data-gamepad-next>次の判断</button>
-    </footer>
-  </section>
-</dialog>
 
 <dialog id="coach-detail-dialog" aria-labelledby="coach-detail-title" data-gamepad-scope="coach-detail">
   <section class="coach-detail-shell">
@@ -290,24 +213,6 @@
   </section>
 </dialog>
 
-<dialog id="thought-detail-dialog" aria-labelledby="thought-detail-title" aria-describedby="thought-detail-summary" data-gamepad-scope="thought-detail">
-  <section class="thought-detail-shell">
-    <header class="thought-detail-header">
-      <div>
-        <span id="thought-detail-speaker">COMの思考</span>
-        <h2 id="thought-detail-title">判断の全文</h2>
-      </div>
-    </header>
-    <div class="thought-detail-scroll">
-      <p id="thought-detail-summary">公開情報から判断した理由を表示します。</p>
-      <dl id="thought-detail-details"></dl>
-    </div>
-    <footer class="thought-detail-footer">
-      <button id="thought-detail-back" type="button" data-gamepad-back>思考へ戻る</button>
-      <button id="thought-detail-next" type="button" data-gamepad-default>次へ</button>
-    </footer>
-  </section>
-</dialog>
 
 <dialog id="stats-dialog" aria-labelledby="stats-title">
   <section class="stats-shell">
@@ -339,31 +244,13 @@
       </section>
       <section class="pause-settings" aria-labelledby="pause-settings-title">
         <h3 id="pause-settings-title">対局中の設定</h3>
-        <label class="pause-setting-row" for="pause-thought-toggle">
-          <span><strong>思考公開</strong><small>次のCOM判断から反映</small></span>
-          <input id="pause-thought-toggle" type="checkbox" role="switch">
-        </label>
         <label class="pause-setting-row" for="pause-coach-toggle">
           <span><strong>打ち手ガイド</strong><small>あなたの手番で候補と理由を表示</small></span>
           <input id="pause-coach-toggle" type="checkbox" role="switch">
         </label>
-        <label class="pause-setting-row" for="pause-review-toggle">
-          <span><strong>局後感想戦</strong><small>この局の記録にも反映</small></span>
-          <input id="pause-review-toggle" type="checkbox" role="switch">
-        </label>
         <label class="pause-setting-row" for="pause-no-calls-toggle">
           <span><strong>鳴きなし</strong><small>ポン・チー・明槓を自動スルー</small></span>
           <input id="pause-no-calls-toggle" type="checkbox" role="switch">
-        </label>
-        <label class="pause-setting-row duration" for="pause-thought-duration">
-          <span><strong>思考の表示時間</strong><small>表示中は対局進行を停止</small></span>
-          <select id="pause-thought-duration">
-            <option value="3">3秒</option>
-            <option value="6">6秒</option>
-            <option value="10" selected>10秒</option>
-            <option value="15">15秒</option>
-            <option value="manual">手動送り</option>
-          </select>
         </label>
         <section class="pause-audio-settings" aria-labelledby="pause-audio-title">
           <div class="pause-audio-heading"><strong id="pause-audio-title">音響</strong><small>同梱済み音源のみ・外部通信なし</small></div>
@@ -396,7 +283,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=57"></script>
+<script type="module" src="js/ui/main.js?v=58"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>

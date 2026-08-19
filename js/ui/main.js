@@ -6,7 +6,6 @@ import {
 import { ComActor } from '../engine/ai.js?v=18';
 import { canDeclareRiichi } from '../engine/legal-actions.js';
 import { createDealerCeremony } from '../engine/opening-dealer.js?v=17';
-import { buildRoundReview } from '../engine/review-evaluator.js?v=18';
 import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.js';
 import { svgFace } from './tilesvg.js?v=10';
 import { concealedTileCuboid } from './tile-cuboid.js?v=2';
@@ -21,7 +20,6 @@ import {
   clearActiveSession,
   hydrateDesktopSettings,
   loadActiveSession,
-  normalizeThoughtDuration,
   persistActiveSession,
   persistDesktopSettings,
   readAudioPreferences,
@@ -29,7 +27,6 @@ import {
   writeAudioPreferences,
   writeLearningModePreferences,
 } from '../platform/desktop-settings.js?v=17';
-import { presentReviewDecision, presentThought } from './decision-presenter.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
@@ -38,7 +35,7 @@ import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.j
 import { AudioDirector } from './audio-director.js?v=19';
 import { classifyWinPresentation, winCinematicCopy, winSuspenseDuration } from './win-presentation.js?v=3';
 import {
-  AUDIO_MANIFEST, CHARACTER_AUDIO_IDS, selectThoughtVoiceId,
+  AUDIO_MANIFEST, CHARACTER_AUDIO_IDS,
 } from './audio-manifest.js?v=18';
 
 const $ = (sel) => document.querySelector(sel);
@@ -313,23 +310,15 @@ class UI {
     });
     this.noCalls = loadNoCallsPreference(this.preferenceStorage);
     const learningModes = readLearningModePreferences(this.preferenceStorage);
-    this.reviewMode = learningModes.reviewMode;
-    this.thoughtMode = learningModes.thoughtMode;
     this.coachMode = learningModes.coachMode;
-    this.thoughtDuration = learningModes.thoughtDuration;
-    this.thoughtSequence = 0;
     this.stats = new StatsTracker();
     this.calloutSequence = 0;
     this.riichiStickSequence = 0;
     this.winCinematicSequence = 0;
     this.roundAnalyses = new Map();
-    this.reviewCursor = 0;
-    this.currentReview = null;
     this.paused = false;
     this.pauseChangeListeners = new Set();
     this.cancelListeners = new Set();
-    this.activeThoughtFinish = null;
-    this.activeThoughtDetail = null;
     this.activeCoachDetail = null;
     this.latestCoachResult = null;
     this.latestCoachContext = { view: null, offer: null, options: null };
@@ -339,7 +328,6 @@ class UI {
       const saved = localStorage.getItem('jun-guide-style-v1');
       return GUIDE_STYLES.some(style => style.profile === saved) ? saved : 'balance';
     })();
-    this.finishThoughtOnResume = false;
     this.activeRiichiCancel = null;
     this.activeHandBack = null;
     this.savedSession = null;
@@ -359,7 +347,6 @@ class UI {
     this.initNoCallsControl();
     this.initLearningModeControls();
     this.initAudioControls();
-    this.initThoughtDetailControls();
     this.initCoachDetailControls();
     this.initCoachControls();
     this.initPauseControls();
@@ -387,64 +374,26 @@ class UI {
     if (control) control.dataset.state = this.noCalls ? 'success' : 'default';
   }
 
+
   initLearningModeControls() {
     const sync = () => {
-      for (const id of ['review-mode-toggle', 'pause-review-toggle']) {
-        const control = $(`#${id}`);
-        if (control) control.checked = this.reviewMode;
-      }
-      for (const id of ['thought-mode-toggle', 'pause-thought-toggle']) {
-        const control = $(`#${id}`);
-        if (control) control.checked = this.thoughtMode;
-      }
       for (const id of ['coach-mode-toggle', 'pause-coach-toggle']) {
         const control = $(`#${id}`);
         if (control) control.checked = this.coachMode;
       }
-      for (const id of ['thought-duration-select', 'pause-thought-duration']) {
-        const control = $(`#${id}`);
-        if (control) control.value = String(this.thoughtDuration);
-      }
     };
     const commit = changes => {
-      if (Object.prototype.hasOwnProperty.call(changes, 'reviewMode')) {
-        this.reviewMode = changes.reviewMode === true;
-      }
-      if (Object.prototype.hasOwnProperty.call(changes, 'thoughtMode')) {
-        this.thoughtMode = changes.thoughtMode === true;
-        this.finishThoughtOnResume = !this.thoughtMode && this.paused && Boolean(this.activeThoughtFinish);
-        if (!this.thoughtMode && !this.paused) this.activeThoughtFinish?.('disabled');
-      }
       if (Object.prototype.hasOwnProperty.call(changes, 'coachMode')) {
         this.coachMode = changes.coachMode === true;
         if (!this.coachMode) this.hideCoach();
       }
-      if (Object.prototype.hasOwnProperty.call(changes, 'thoughtDuration')) {
-        this.thoughtDuration = normalizeThoughtDuration(changes.thoughtDuration);
-      }
-      writeLearningModePreferences(this.preferenceStorage, {
-        reviewMode: this.reviewMode,
-        thoughtMode: this.thoughtMode,
-        coachMode: this.coachMode,
-        thoughtDuration: this.thoughtDuration,
-      });
+      writeLearningModePreferences(this.preferenceStorage, { coachMode: this.coachMode });
       void persistDesktopSettings(this.preferenceStorage);
       sync();
     };
-    for (const [id, property] of [
-      ['review-mode-toggle', 'reviewMode'],
-      ['pause-review-toggle', 'reviewMode'],
-      ['thought-mode-toggle', 'thoughtMode'],
-      ['pause-thought-toggle', 'thoughtMode'],
-      ['coach-mode-toggle', 'coachMode'],
-      ['pause-coach-toggle', 'coachMode'],
-    ]) {
+    for (const id of ['coach-mode-toggle', 'pause-coach-toggle']) {
       const control = $(`#${id}`);
-      control?.addEventListener('change', () => commit({ [property]: control.checked }));
-    }
-    for (const id of ['thought-duration-select', 'pause-thought-duration']) {
-      const control = $(`#${id}`);
-      control?.addEventListener('change', () => commit({ thoughtDuration: control.value }));
+      control?.addEventListener('change', () => commit({ coachMode: control.checked }));
     }
     sync();
   }
@@ -533,20 +482,6 @@ class UI {
       });
       dialog.addEventListener('close', () => this.setPaused(false));
     }
-  }
-
-  initThoughtDetailControls() {
-    const dialog = $('#thought-detail-dialog');
-    if (!dialog) return;
-    $('#thought-detail-back')?.addEventListener('click', () => this.closeThoughtDetail());
-    $('#thought-detail-next')?.addEventListener('click', () => {
-      this.closeThoughtDetail({ advance: true });
-    });
-    dialog.addEventListener('cancel', event => {
-      event.preventDefault();
-      this.closeThoughtDetail();
-    });
-    dialog.addEventListener('close', () => this.finishThoughtDetailClose());
   }
 
   initCoachDetailControls() {
@@ -847,71 +782,6 @@ class UI {
     }
   }
 
-  openThoughtDetail(bubble, view, onAdvance) {
-    const dialog = $('#thought-detail-dialog');
-    if (!dialog || dialog.open || !bubble || !view) return false;
-    $('#thought-detail-speaker').textContent = `${view.speaker || 'COM'}の思考`;
-    $('#thought-detail-title').textContent = view.headline || '判断の全文';
-    $('#thought-detail-summary').textContent = view.fullBody || view.body || '記録された範囲だけを表示します。';
-    const details = $('#thought-detail-details');
-    details.replaceChildren();
-    for (const detail of view.details ?? []) {
-      const term = document.createElement('dt');
-      term.textContent = detail.label;
-      const description = document.createElement('dd');
-      description.textContent = detail.value;
-      details.append(term, description);
-    }
-    details.classList.toggle('hidden', details.childElementCount === 0);
-    this.activeThoughtDetail = {
-      bubble,
-      onAdvance,
-      advanceOnClose: false,
-      restoreBubble: true,
-    };
-    bubble.dataset.gamepadActive = 'false';
-    try {
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-      this.setPaused(true);
-      $('#thought-detail-next')?.focus({ preventScroll: true });
-      return true;
-    } catch (error) {
-      console.error('Thought detail dialog could not be opened.', error);
-      this.activeThoughtDetail = null;
-      bubble.dataset.gamepadActive = 'true';
-      return false;
-    }
-  }
-
-  closeThoughtDetail({ advance = false, restoreBubble = true } = {}) {
-    const active = this.activeThoughtDetail;
-    if (!active) return false;
-    active.advanceOnClose ||= advance === true;
-    active.restoreBubble &&= restoreBubble !== false;
-    const dialog = $('#thought-detail-dialog');
-    if (dialog?.open && typeof dialog.close === 'function') dialog.close();
-    else {
-      dialog?.removeAttribute('open');
-      this.finishThoughtDetailClose();
-    }
-    return true;
-  }
-
-  finishThoughtDetailClose() {
-    const active = this.activeThoughtDetail;
-    if (!active) return;
-    this.activeThoughtDetail = null;
-    this.setPaused(false);
-    if (active.restoreBubble && !active.bubble.classList.contains('hidden')) {
-      active.bubble.dataset.gamepadActive = 'true';
-      active.bubble.querySelector('.seat-thought-skip')?.focus({ preventScroll: true });
-    } else {
-      active.bubble.dataset.gamepadActive = 'false';
-    }
-    if (active.advanceOnClose) active.onAdvance?.('detail');
-  }
-
   initGamepadEvents() {
     document.addEventListener(GAMEPAD_EVENTS.menu, event => {
       event.preventDefault();
@@ -946,7 +816,6 @@ class UI {
     this.pendingClaimPass = null;
     this.activeRiichiCancel = null;
     this.activeHandBack = null;
-    this.activeThoughtFinish = null;
     this.pauseChangeListeners.clear();
     this.setPaused(false);
   }
@@ -1180,7 +1049,7 @@ class UI {
   openPause() {
     const dialog = $('#pause-dialog');
     if (!dialog || dialog.open || !this.game || this.game.isCancelled()) return false;
-    if ($('#review-dialog')?.open || $('#thought-detail-dialog')?.open || $('#coach-detail-dialog')?.open ||
+    if ($('#coach-detail-dialog')?.open ||
         !$('#overlay')?.classList.contains('hidden')) return false;
     this.syncPauseSummary();
     this.refreshAreReportExportLabel();
@@ -1197,10 +1066,6 @@ class UI {
     if (dialog?.open && typeof dialog.close === 'function') dialog.close();
     else dialog?.removeAttribute('open');
     this.setPaused(false);
-    if (this.finishThoughtOnResume) {
-      this.finishThoughtOnResume = false;
-      this.activeThoughtFinish?.('disabled');
-    }
     return true;
   }
 
@@ -1257,7 +1122,6 @@ class UI {
     this.tabletopKakanPreview = null;
     this.webglTabletop?.clearWinFocus?.();
     this.cancelActiveWaits(reason);
-    this.hideThought();
     this.resetActionBar();
     $('#overlay')?.classList.add('hidden');
     $('#splash')?.classList.add('hidden');
@@ -1318,7 +1182,6 @@ class UI {
   showFatalGameError(error) {
     console.error('Game stopped because an unrecoverable error occurred.', error);
     this.resetActionBar();
-    this.hideThought();
     const content = $('#overlay-content');
     content.replaceChildren();
     const title = document.createElement('h2');
@@ -1343,9 +1206,7 @@ class UI {
   async onDecisionEvent(type, data) {
     await this.waitWhilePaused();
     if (type === 'beforeDecision') {
-      if (data.request.actor !== 0 && this.thoughtMode) {
-        this.showThoughtPending(data.request.actor);
-      } else if (!this.spectate && data.request.actor === 0 &&
+      if (!this.spectate && data.request.actor === 0 &&
           data.request.view?.riichi === true && data.request.view?.drawn &&
           data.request.availableCandidates?.length === 1 &&
           data.request.availableCandidates[0]?.command?.action === 'discard') {
@@ -1357,90 +1218,11 @@ class UI {
     }
     if (type === 'decisionCommitted') {
       if (data.analysis) this.roundAnalyses.set(data.record.id, data.analysis);
-      if (data.record.actor !== 0 && this.thoughtMode) {
-        if (data.analysis) await this.showThoughtCommitted(data.record.actor, data.analysis);
-        else this.hideThought();
-      }
       return;
     }
     if (type === 'roundComplete') {
-      this.hideThought();
       this.roundAnalyses.clear();
-      if (this.reviewMode) await this.showRoundReview(buildRoundReview(data.round));
     }
-  }
-
-  showThoughtPending(actor) {
-    const bubble = this.thoughtBubble(actor);
-    if (!bubble) return;
-    this.clearThoughtBubbles();
-    this.thoughtSequence++;
-    bubble.querySelector('.seat-thought-speaker').textContent = `${SEAT_LABELS[actor] ?? 'COM'}の思考`;
-    bubble.querySelector('.seat-thought-headline').textContent = '公開情報を照合中';
-    bubble.querySelector('.seat-thought-body').textContent = '河・点棒・受入枚数を確認しています。';
-    bubble.querySelector('.seat-thought-metrics').textContent = '';
-    bubble.querySelector('.seat-thought-more').classList.add('hidden');
-    bubble.querySelector('.seat-thought-skip').classList.add('hidden');
-    bubble.dataset.gamepadActive = 'true';
-    bubble.classList.remove('hidden');
-  }
-
-  async showThoughtCommitted(actor, analysis) {
-    const token = ++this.thoughtSequence;
-    const bubble = this.thoughtBubble(actor);
-    if (!bubble) return;
-    const view = presentThought(analysis, {
-      name: SEAT_LABELS[actor] ?? 'COM',
-      profile: COM_PROFILES[actor] ?? analysis.profile,
-    });
-    bubble.querySelector('.seat-thought-speaker').textContent = `${SEAT_LABELS[actor] ?? 'COM'}の思考`;
-    bubble.querySelector('.seat-thought-headline').textContent = view.headline;
-    bubble.querySelector('.seat-thought-body').textContent = view.body;
-    bubble.querySelector('.seat-thought-metrics').textContent = (view.metrics ?? []).slice(0, 2).join('  ·  ');
-    const more = bubble.querySelector('.seat-thought-more');
-    const skip = bubble.querySelector('.seat-thought-skip');
-    const hasExtendedThought = view.hasMore === true ||
-      (view.fullBody?.length ?? 0) > view.body.length ||
-      view.body.length > 80 || (view.details ?? []).length > 0;
-    more.classList.toggle('hidden', !hasExtendedThought);
-    skip.classList.remove('hidden');
-    bubble.dataset.gamepadActive = 'true';
-    bubble.classList.remove('hidden');
-    this.playThoughtVoice(actor, analysis);
-
-    await new Promise((resolve, reject) => {
-      let settled = false;
-      let unregisterCancel = () => {};
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        unregisterCancel();
-        more.onclick = null;
-        skip.onclick = null;
-        if (this.activeThoughtFinish === finish) this.activeThoughtFinish = null;
-        resolve();
-      };
-      const fail = error => {
-        if (settled) return;
-        settled = true;
-        unregisterCancel();
-        if (this.activeThoughtDetail?.bubble === bubble) {
-          this.closeThoughtDetail({ restoreBubble: false });
-        }
-        more.onclick = null;
-        skip.onclick = null;
-        if (this.activeThoughtFinish === finish) this.activeThoughtFinish = null;
-        reject(error);
-      };
-      unregisterCancel = this.addCancelListener(reason => fail(new GameCancelledError(reason)));
-      this.activeThoughtFinish = finish;
-      more.onclick = () => this.openThoughtDetail(bubble, view, finish);
-      skip.onclick = finish;
-      if (this.thoughtDuration !== 'manual') {
-        this.pauseAwareDelay(Number(this.thoughtDuration) * 1000).then(finish, fail);
-      }
-    });
-    if (token === this.thoughtSequence) this.hideThought();
   }
 
   playCharacterVoice(player, cue, { critical = false } = {}) {
@@ -1530,194 +1312,6 @@ class UI {
     panel.removeAttribute('data-phase');
     this.latestCoachResult = null;
     this.latestCoachContext = { view: null, offer: null, options: null };
-  }
-
-  playThoughtVoice(actor, analysis) {
-    const voiceId = selectThoughtVoiceId(actor, analysis);
-    if (voiceId) void this.audio.playVoice(voiceId);
-  }
-
-  thoughtBubble(actor) {
-    return Number.isInteger(actor) ? $(`#thought-seat-${actor}`) : null;
-  }
-
-  clearThoughtBubbles() {
-    for (let actor = 1; actor <= 3; actor++) {
-      const bubble = this.thoughtBubble(actor);
-      if (!bubble) continue;
-      bubble.classList.add('hidden');
-      bubble.dataset.gamepadActive = 'false';
-      const skip = bubble.querySelector('.seat-thought-skip');
-      const more = bubble.querySelector('.seat-thought-more');
-      if (skip) skip.onclick = null;
-      if (more) {
-        more.onclick = null;
-        more.classList.add('hidden');
-      }
-    }
-  }
-
-  hideThought() {
-    this.thoughtSequence++;
-    this.closeThoughtDetail({ restoreBubble: false });
-    this.activeThoughtFinish?.('hidden');
-    this.activeThoughtFinish = null;
-    this.clearThoughtBubbles();
-  }
-
-  async showRoundReview(review) {
-    const dialog = $('#review-dialog');
-    const entries = review?.entries ?? [];
-    this.currentReview = review;
-    this.reviewCursor = 0;
-    const scoredCandidates = entries.flatMap(entry => entry.reviews ?? [])
-      .filter(evaluation => evaluation.status !== 'forced');
-    const fullyScored = scoredCandidates.length > 0 &&
-      scoredCandidates.every(evaluation => evaluation.status === 'scored' && Number.isFinite(evaluation.score));
-    $('#review-overall-score').textContent = fullyScored && Number.isFinite(review?.overallScore)
-      ? String(Math.round(review.overallScore))
-      : '—';
-
-    const timeline = $('#review-timeline-list');
-    timeline.replaceChildren();
-    if (entries.length === 0) {
-      $('#review-progress').textContent = '採点対象なし';
-      $('#review-decision-number').textContent = 'この局の記録';
-      $('#review-choice').textContent = '採点対象となる判断はありません';
-      $('#review-recommendation').textContent = '強制打牌だけだった局は、推測で点数を付けず記録だけを残します。';
-      $('#review-comments').replaceChildren();
-      $('#review-prev').disabled = true;
-      $('#review-next').disabled = true;
-    } else {
-      entries.forEach((entry, index) => {
-        const item = document.createElement('li');
-        const button = document.createElement('button');
-        button.type = 'button';
-        if (index === 0) button.dataset.gamepadDefault = '';
-        const view = presentReviewDecision({
-          record: entry.record,
-          evaluations: entry.reviews,
-          index,
-          total: entries.length,
-        });
-        const number = document.createElement('span');
-        number.textContent = String(index + 1).padStart(2, '0');
-        const label = document.createElement('strong');
-        label.textContent = view.actionLabel;
-        const score = document.createElement('small');
-        score.textContent = Number.isFinite(view.score) ? `${Math.round(view.score)}` : '—';
-        button.append(number, label, score);
-        button.onclick = () => {
-          this.reviewCursor = index;
-          this.renderReviewDecision();
-        };
-        button.addEventListener('focus', () => {
-          if (this.reviewCursor === index) return;
-          this.reviewCursor = index;
-          this.renderReviewDecision({ focusTimeline: false });
-        });
-        item.appendChild(button);
-        timeline.appendChild(item);
-      });
-      this.renderReviewDecision();
-    }
-
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      let unregisterCancel = () => {};
-      const close = () => {
-        if (settled) return;
-        settled = true;
-        unregisterCancel();
-        if (dialog.open) dialog.close();
-        this.currentReview = null;
-        resolve();
-      };
-      const cancel = reason => {
-        if (settled) return;
-        settled = true;
-        unregisterCancel();
-        if (dialog.open) dialog.close();
-        this.currentReview = null;
-        reject(new GameCancelledError(reason));
-      };
-      unregisterCancel = this.addCancelListener(cancel);
-      $('#review-close').onclick = close;
-      dialog.oncancel = event => {
-        event.preventDefault();
-        close();
-      };
-      dialog.onclose = () => {
-        if (!settled) close();
-      };
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-    });
-  }
-
-  renderReviewDecision({ focusTimeline = true } = {}) {
-    const entries = this.currentReview?.entries ?? [];
-    if (entries.length === 0) return;
-    const index = Math.max(0, Math.min(this.reviewCursor, entries.length - 1));
-    this.reviewCursor = index;
-    const entry = entries[index];
-    const view = presentReviewDecision({
-      record: entry.record,
-      evaluations: entry.reviews,
-      index,
-      total: entries.length,
-    });
-    $('#review-progress').textContent = `${index + 1} / ${entries.length}`;
-    $('#review-decision-number').textContent = `判断 ${String(index + 1).padStart(2, '0')} · ${view.scored ? '採点対象' : '参考記録'}`;
-    $('#review-choice').textContent = view.actionLabel;
-    $('#review-recommendation').textContent = `3人の推奨: ${view.recommendation}`;
-
-    const comments = $('#review-comments');
-    comments.replaceChildren();
-    for (const comment of view.comments ?? []) {
-      const article = document.createElement('article');
-      article.className = 'review-comment';
-      const persona = document.createElement('div');
-      persona.className = 'review-comment-persona';
-      const name = document.createElement('strong');
-      name.textContent = comment.name;
-      const role = document.createElement('small');
-      role.textContent = comment.role;
-      persona.append(name, role);
-      const body = document.createElement('div');
-      body.className = 'review-comment-body';
-      const headline = document.createElement('h4');
-      headline.textContent = comment.headline;
-      const copy = document.createElement('p');
-      copy.textContent = comment.body;
-      body.append(headline, copy);
-      const score = document.createElement('div');
-      score.className = 'review-comment-score';
-      score.textContent = Number.isFinite(comment.score) ? String(Math.round(comment.score)) : '—';
-      const scoreLabel = document.createElement('small');
-      scoreLabel.textContent = Number.isFinite(comment.score) ? '/ 100' : (comment.scoreLabel ?? '参考');
-      score.appendChild(scoreLabel);
-      article.append(persona, body, score);
-      comments.appendChild(article);
-    }
-
-    const buttons = [...document.querySelectorAll('#review-timeline-list button')];
-    buttons.forEach((button, buttonIndex) => button.setAttribute('aria-current', buttonIndex === index ? 'true' : 'false'));
-    if (focusTimeline) buttons[index]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    $('#review-prev').disabled = index === 0;
-    $('#review-next').disabled = index === entries.length - 1;
-    $('#review-prev').onclick = () => {
-      if (this.reviewCursor > 0) {
-        this.reviewCursor--;
-        this.renderReviewDecision();
-      }
-    };
-    $('#review-next').onclick = () => {
-      if (this.reviewCursor < entries.length - 1) {
-        this.reviewCursor++;
-        this.renderReviewDecision();
-      }
-    };
   }
 
   // Gameがawaitするので、Promiseを返せば進行が止まる
