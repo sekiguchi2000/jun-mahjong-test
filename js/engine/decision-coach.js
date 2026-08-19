@@ -650,6 +650,24 @@ function turnExplanationParts(view, analysis) {
     } else {
       sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
     }
+    // 打点対比 (カルテ21号): 相手リーチが高そうで自手が安いときは、その判断軸を言う
+    {
+      const contrast = (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_VALUE_CONTRAST');
+      if (contrast) {
+        const threatParts = [];
+        if ((contrast.threatKans ?? 0) > 0) threatParts.push('カンが入り');
+        if ((contrast.indicators ?? 1) > 1) threatParts.push(`ドラ表示が${contrast.indicators}枚あって裏ドラも増える`);
+        const threatText = threatParts.length > 0
+          ? `相手のリーチは${threatParts.join('、')}ため、打点が高くなりやすい状況です。`
+          : '';
+        const cheapText = (contrast.ownValueTiles ?? 0) === 0
+          ? 'こちらの手にはドラ・赤がなく安いので、押す見返りが小さく、安全寄りに判断します。'
+          : ((contrast.ownValueTiles ?? 0) === 1
+            ? 'こちらの手の打点の種は少なめなので、やや安全寄りに判断します。'
+            : '');
+        if (threatText || cheapText) sentences.push(`${threatText}${cheapText}`.trim());
+      }
+    }
     if (factors.has('PRESSURE_CAUTION')) {
       const caution = pressureCautionSentence(view, analysis);
       if (caution) sentences.push(caution);

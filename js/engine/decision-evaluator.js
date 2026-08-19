@@ -591,7 +591,11 @@ function discardCandidate({
     const pushFactor = afterShanten === 0 ? 0.15 : afterShanten === 1 ? 0.3 : 0.5;
     const biasCode = context.planContext?.valueBiasCode;
     const biasAdjust = biasCode === 'CHASE_VALUE' ? 0.7 : biasCode === 'PROTECT_LEAD' ? 1.3 : 1;
-    const penalty = -(safety.maxRisk * pushFactor * (style.cautionWeight ?? 1) * biasAdjust);
+    // 打点対比 (2026-08-19実戦カルテ21号): カン入り・ドラ表示増のリーチは高打点の
+    // 気配(裏ドラも倍)。相手が高そうで自手が安いほど降り寄りに倒す。
+    const threatScale = context.threatValue?.threatScale ?? 1;
+    const cheapScale = context.threatValue?.cheapScale ?? 1;
+    const penalty = -(safety.maxRisk * pushFactor * (style.cautionWeight ?? 1) * biasAdjust * threatScale * cheapScale);
     utilityAdjustments.pushRiskPenalty = Math.round(penalty * 100) / 100;
   }
   // テンパイ気配への警戒 (AI_DESIGN_V12 第3段): 気配のある相手に危険な牌ほど
@@ -916,10 +920,25 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   const context = strategicContext(view);
   // プラン列挙は手牌全体から1回だけ (各打牌候補で共有)
   context.plans = evaluateHandPlans(handAll, view.melds ?? [], context.planContext);
+  // 打点対比 (カルテ21号): 公開情報から相手リーチの高さと自手の安さを見積もり、
+  // 押し引きペナルティのスケールにする。カン(ドラ表示増=裏ドラも倍)は高打点の気配
+  if (threats.length > 0) {
+    const indicators = view.public?.doraIndicators?.length ?? 1;
+    const threatKans = threats.reduce((sum, threat) =>
+      sum + (threat.pl.melds ?? []).filter(meld => (meld.tiles?.length ?? 0) === 4).length, 0);
+    const threatScale = Math.min(2.2, 1 + 0.35 * Math.max(0, indicators - 1) + 0.3 * threatKans);
+    const ownValueTiles = handAll.filter(tile =>
+      tile.red || context.doraKinds.includes(tile.kind)).length;
+    const cheapScale = ownValueTiles >= 2 ? 1 : ownValueTiles === 1 ? 1.15 : 1.3;
+    context.threatValue = { threatScale, cheapScale, indicators, threatKans, ownValueTiles };
+  }
   const forbiddenWin = optionSet.has('tsumo') && isForbiddenLastPlaceWin(view.winPreview);
   const sanitizedWinPreview = copyKnown(view.winPreview, WIN_PREVIEW_KEYS);
   const placement = copyKnown(view.placement, PLACEMENT_KEYS);
   const facts = turnFacts(view, options, handAll, meldCount, currentShanten, threats, context);
+  if (context.threatValue && (context.threatValue.threatScale > 1 || context.threatValue.cheapScale > 1)) {
+    facts.push({ code: 'THREAT_VALUE_CONTRAST', ...context.threatValue });
+  }
   const estimates = [...context.flushSignals, ...context.pressureSignals];
   const coverage = {
     legality: 'EXACT',
@@ -1061,7 +1080,12 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   let legacyTrace = null;
   let decisiveFactors = [];
 
-  if (threats.length > 0 && currentShanten >= style.foldAt && !view.riichi) {
+  // 打点対比 (カルテ21号): 相手のリーチが高そう(カン・ドラ表示増)で自手が安いときは
+  // 降りの閾値を1段早める(analystは1向聴から降り)。テンパイからは降ろさない
+  const highContrast = context.threatValue &&
+    context.threatValue.threatScale >= 1.3 && context.threatValue.cheapScale >= 1.15;
+  const effectiveFoldAt = highContrast ? Math.max(1, style.foldAt - 1) : style.foldAt;
+  if (threats.length > 0 && currentShanten >= effectiveFoldAt && !view.riichi) {
     const safeChoice = pickSafeTileDetailed(handAll, threats, view, discardCandidates);
     if (safeChoice.index >= 0) {
       selected = discardCandidates.find(candidate => candidate.action.index === safeChoice.index);
