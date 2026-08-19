@@ -315,6 +315,33 @@ function acceptanceSentence(metrics) {
   return `引いて嬉しいのは${names}${suffix}、見えている範囲で合計${metrics.ukeirePhysical}枚です。`;
 }
 
+// 「広さで負けているのに選んだ」理由の内訳: 効用補正の差が最大の要因を名指しする。
+// 定型の「見えている価値や相手の捨て牌を優先して」で済まさない(2026-08-19指摘)
+export function dominantKeepReason(altCandidate, selectedCandidate, altName) {
+  const altAdjustments = altCandidate?.metrics?.utilityAdjustments ?? {};
+  const selectedAdjustments = selectedCandidate?.metrics?.utilityAdjustments ?? {};
+  const phrases = {
+    redDiscardPenalty: `${altName}は赤牌で、切ると確定1翻を失うため`,
+    doraDiscardPenalty: `${altName}はドラのため`,
+    planRetention: null, // planKeepPhraseで具体化
+    suitPressurePenalty: `${altName}は相手の染め気配の色で切りにくいため`,
+    pushRiskPenalty: `${altName}の方がリーチ相手に危険なため`,
+    pressureCautionPenalty: `${altName}の方がテンパイ気配の相手に危険なため`,
+  };
+  let bestKey = null;
+  let bestDiff = -0.2; // これ未満の差は「僅差」として扱う
+  for (const key of Object.keys(phrases)) {
+    const diff = (altAdjustments[key] ?? 0) - (selectedAdjustments[key] ?? 0);
+    if (diff < bestDiff) { bestDiff = diff; bestKey = key; }
+  }
+  if (!bestKey) return null;
+  if (bestKey === 'planRetention') {
+    const keep = planKeepPhrase(altCandidate?.metrics?.planEvaluation);
+    return keep ? `${altName}は${keep}のため` : `${altName}の方が手の形として残す価値が高いため`;
+  }
+  return phrases[bestKey];
+}
+
 // 「これを狙うならこっち」: 第二プランごとに最適な分岐打牌を出す
 function planAlternativeParts(view, analysis) {
   const selected = selectedCandidate(analysis);
@@ -621,6 +648,14 @@ function comparisonParts(view, analysis) {
       (selectedMetrics.utilityAdjustments?.pushRiskPenalty ?? 0);
     if (delta === 0 && altDangerPenalty < selDangerPenalty - 0.3) {
       parts.push(`${name}を切る案も手の進み方は同じですが、相手には${selectedName}の方が通りやすいため、先に${selectedName}を処理します。`);
+      continue;
+    }
+    // 広さで負けているのに選んだケース: 効用差の最大要因を名指しする(カルテ28号)
+    if (delta < 0) {
+      const reason = dominantKeepReason(candidate, selected, name);
+      parts.push(reason
+        ? `${name}を切る案の方が受け入れは${-delta}枚広いですが、${reason}、${selectedName}を先に切ります。`
+        : `${name}を切る案の方が受け入れは${-delta}枚広く、ほぼ互角です。残す価値の合計でわずかに${selectedName}切りを取っています。`);
       continue;
     }
   }

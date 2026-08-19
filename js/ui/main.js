@@ -30,7 +30,7 @@ import {
   writeLearningModePreferences,
 } from '../platform/desktop-settings.js?v=17';
 import { presentReviewDecision, presentThought } from './decision-presenter.js?v=17';
-import { buildTurnCoaching, buildClaimCoaching } from '../engine/decision-coach.js?v=5';
+import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
@@ -639,7 +639,11 @@ class UI {
         explanation = `${selectedName}切りより手の広がりが${selectedMetrics.ukeirePhysical - metrics.ukeirePhysical}枚分だけ狭くなります。`;
       } else if (Number.isFinite(metrics.ukeirePhysical) && Number.isFinite(selectedMetrics.ukeirePhysical) &&
           selectedMetrics.ukeirePhysical < metrics.ukeirePhysical) {
-        explanation = `形の広さだけなら${name}が上ですが、見えている価値や相手の捨て牌を優先して${selectedName}を選びます。`;
+        // 定型で済まさず、効用差の最大要因を名指しする(2026-08-19指摘)
+        const keepReason = dominantKeepReason(candidate, selected, name);
+        explanation = keepReason
+          ? `形の広さだけなら${name}が上ですが、${keepReason}、${selectedName}を先に切ります。`
+          : `形の広さだけなら${name}が上で、ほぼ互角です。残す価値の合計でわずかに${selectedName}切りを取っています。`;
       } else {
         // 互角の対案こそ具体的に: 曖昧な「差は小さい」で片づけない(2026-08-19指定)
         const tile = Number.isInteger(candidate.action?.index) ? handAll[candidate.action.index] : null;
