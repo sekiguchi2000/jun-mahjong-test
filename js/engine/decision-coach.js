@@ -807,11 +807,23 @@ function claimExplanationParts(view, offer, analysis) {
     // 「鳴けば速い」ことは認めた上で、なぜ鳴かないかの天秤を明言する(カルテ25号)
     const passMetrics = (analysis?.candidates ?? []).find(candidate =>
       candidate.candidateId === 'pass')?.metrics ?? {};
+    // 死にテンパイ (カルテ29号): 鳴けばテンパイでも待ちが生きていないならそれが理由
+    if (passMetrics.deadWait) {
+      const dead = passMetrics.deadWait;
+      const waitNames = (dead.waitKinds ?? []).map(kind => tileName(kind)).join('・');
+      return [
+        `スルー（鳴かない）を勧めます。${claimedName}を鳴けばテンパイに届きますが、その待ち（${waitNames}）は見えている範囲で残り${dead.live}枚しか生きていません。`,
+        'ほぼあがれない形に手を固定するより、スルーして手の変化を待ちます。',
+      ];
+    }
     const improves = Number.isInteger(passMetrics.bestClaimShanten) &&
       Number.isInteger(passMetrics.shantenBefore) &&
       passMetrics.bestClaimShanten < passMetrics.shantenBefore;
+    const speedText = passMetrics.bestClaimShanten === 0
+      ? `${claimedName}を鳴けばテンパイに届くのは見えています。`
+      : `${claimedName}を鳴けば${shantenLabel(passMetrics.shantenBefore)}から${shantenLabel(passMetrics.bestClaimShanten)}へ速くなるのは見えています。`;
     const parts = improves
-      ? [`スルー（鳴かない）を勧めます。${claimedName}を鳴けば${shantenLabel(passMetrics.shantenBefore)}から${shantenLabel(passMetrics.bestClaimShanten)}へ速くなるのは見えています。ただ、この手はタンヤオ圏でも役牌バック（役牌の対子持ち）でもないため、鳴くと役の当てが薄く、安手か役無しになりがちです。`]
+      ? [`スルー（鳴かない）を勧めます。${speedText}ただ、この手はタンヤオ圏でも役牌バック（役牌の対子持ち）でもホンイツ圏でもないため、鳴くと役の当てが薄く、安手か役無しになりがちです。`]
       : [`スルー（鳴かない）を勧めます。${claimedName}を鳴いても向聴が進まず、速度の得がありません。${shantenSentence}`.trim()];
     parts.push((view?.melds?.length ?? 0) > 0
       ? 'すでに副露している手ですが、この鳴きには得がありません。手の自由度を保って自分のツモで進めます。'
@@ -825,6 +837,14 @@ function claimExplanationParts(view, offer, analysis) {
     return [
       `${label}を勧めます。鳴いてもタンヤオが確定圏なので役は消えません。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
       '代わりにリーチ・裏ドラは消えるので、打点より速度を取る判断です。',
+    ];
+  }
+  if (reason === 'CALL_FLUSH_SPEED') {
+    const label = action.action === 'pon' ? 'ポン' : 'チー';
+    const selMetrics = (analysis?.candidates ?? []).find(candidate =>
+      candidate.candidateId === analysis?.selected?.candidateId)?.metrics ?? {};
+    return [
+      `${label}を勧めます。この手は一色に染まっていて、鳴いても混一色（ホンイツ）が確定しています。${shantenLabel(selMetrics.shantenBefore)}から${shantenLabel(selMetrics.shantenAfter)}へ速くなります。`,
     ];
   }
   if (reason === 'CALL_YAKUHAI_BACKED') {

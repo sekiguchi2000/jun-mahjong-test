@@ -1450,10 +1450,42 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     }
   }
 
-  // 鳴きの速度評価 (カルテ25号): 鳴いて向聴が進み、かつ役の当てが確かなら勧める。
+  // 鳴きの速度評価 (カルテ25号/29号): 鳴いて向聴が進み、かつ役の当てが確かなら勧める。
   //  ①タンヤオ圏: 鳴く牌が中張で、副露も手もタンヤオを保てる(残る么九・字は1枚まで)
   //  ②役牌バック: 手に役牌の対子が残る(鳴いた後も役の当てがある)
-  // どちらも無い「役の当てが薄い速度だけの鳴き」は従来どおりスルー(理由は明言する)
+  //  ③ホンイツ圏: 手・副露・鳴く牌が一色+字牌に収まる(混一色が確定)
+  // ただし鳴いた先のテンパイの待ちがほぼ死んでいる(生き1枚以下)なら取らない。
+  // どの当ても無い「速度だけの鳴き」は従来どおりスルー(理由は明言する)
+  let deadWaitInfo = null;
+  const visibleForClaim = visibleCounts(view);
+  const bestTenpaiWaits = tilesOut => {
+    const after = counts.slice();
+    for (const outKind of tilesOut) {
+      if (after[outKind] <= 0) return null;
+      after[outKind]--;
+    }
+    let best = null;
+    for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
+      if (after[discardKind] === 0) continue;
+      after[discardKind]--;
+      if (shanten(after, claimMeldCount + 1) === 0) {
+        let live = 0;
+        const waitKinds = [];
+        for (let waitKind = 0; waitKind < KIND_COUNT; waitKind++) {
+          if (after[waitKind] >= 4) continue;
+          after[waitKind]++;
+          if (shanten(after, claimMeldCount + 1) === -1) {
+            live += remainingCopies(visibleForClaim, waitKind);
+            waitKinds.push(waitKind);
+          }
+          after[waitKind]--;
+        }
+        if (!best || live > best.live) best = { live, waitKinds };
+      }
+      after[discardKind]++;
+    }
+    return best;
+  };
   if (!selected) {
     const simpleKind = kindValue => kindValue < 27 && numOf(kindValue) >= 2 && numOf(kindValue) <= 8;
     const handNonSimple = (view.hand ?? []).filter(tile => !simpleKind(tile.kind)).length;
@@ -1464,6 +1496,22 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       const isYakuhaiKind = isDragon(honorKind) || honorKind === view.seatWind || honorKind === view.roundWind;
       if (isYakuhaiKind && counts[honorKind] >= 2) { backedKind = honorKind; break; }
     }
+    // ホンイツ圏: 手+副露が一色+字牌に収まり、鳴く牌も同じ色(または字牌)
+    const suitOfKind = kindValue => (kindValue < 27 ? Math.floor(kindValue / 9) : null);
+    const flushSuits = new Set();
+    for (const tile of view.hand ?? []) {
+      const suit = suitOfKind(tile.kind);
+      if (suit !== null) flushSuits.add(suit);
+    }
+    for (const meld of view.melds ?? []) {
+      for (const tile of meld.tiles ?? []) {
+        const suit = suitOfKind(tile.kind);
+        if (suit !== null) flushSuits.add(suit);
+      }
+    }
+    const offeredSuit = suitOfKind(offer.tile.kind);
+    const flushCall = flushSuits.size <= 1 &&
+      (offeredSuit === null || flushSuits.size === 0 || flushSuits.has(offeredSuit));
     for (const candidate of candidates) {
       const act = candidate.action?.action;
       if ((act !== 'pon' && act !== 'chi') || candidate.allowed === false) continue;
@@ -1473,14 +1521,27 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       const claimedAllSimple = simpleKind(offer.tile.kind) && claimTiles.every(simpleKind);
       const tanyaoCall = claimedAllSimple && meldsAllSimple && handNonSimple <= 1 && shantenNow <= 3;
       const backedCall = backedKind !== null && shantenNow <= 2;
-      if (!tanyaoCall && !backedCall) continue;
+      const honitsuCall = flushCall && shantenNow <= 3;
+      if (!tanyaoCall && !backedCall && !honitsuCall) continue;
+      // 死にテンパイ判定 (カルテ29号): 鳴けばテンパイでも待ちが残り1枚以下なら
+      // 手を固定せずスルーし、その事実を理由として持ち帰る
+      if (afterBest === 0) {
+        const tenpai = bestTenpaiWaits(claimTiles);
+        if (tenpai && tenpai.live <= 1) {
+          if (!deadWaitInfo || tenpai.live < deadWaitInfo.live) {
+            deadWaitInfo = { live: tenpai.live, waitKinds: tenpai.waitKinds };
+          }
+          continue;
+        }
+      }
       candidate.utility = 800;
       candidate.metrics = {
         ...candidate.metrics,
         kind: offer.tile.kind, shantenBefore: shantenNow, shantenAfter: afterBest,
-        backedKind: tanyaoCall ? null : backedKind, evaluated: true,
+        backedKind: (tanyaoCall || honitsuCall) ? null : backedKind, evaluated: true,
       };
-      candidate.reasons = [tanyaoCall ? 'CALL_TANYAO_SPEED' : 'CALL_YAKUHAI_BACKED'];
+      candidate.reasons = [tanyaoCall ? 'CALL_TANYAO_SPEED'
+        : honitsuCall ? 'CALL_FLUSH_SPEED' : 'CALL_YAKUHAI_BACKED'];
       selected = candidate;
       break;
     }
@@ -1499,7 +1560,10 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
         bestClaimShanten = afterBest;
       }
     }
-    pass.metrics = { ...pass.metrics, shantenBefore: shantenNow, bestClaimShanten };
+    pass.metrics = {
+      ...pass.metrics, shantenBefore: shantenNow, bestClaimShanten,
+      ...(deadWaitInfo ? { deadWait: deadWaitInfo } : {}),
+    };
   }
 
   selected ??= pass;
