@@ -67,6 +67,7 @@ function actionLabel(action, view, offer = null) {
     if (action.riichi) return `${tile ? tileName(tile.kind) : 'この牌'}を切ってリーチ`;
     return `${tile ? tileName(tile.kind) : 'この牌'}を切る`;
   }
+  if (action.action === 'ankan') return `${Number.isInteger(action.kind) ? tileName(action.kind) : 'この牌'}を暗カン`;
   if (action.action === 'pon') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をポン`;
   if (action.action === 'minkan') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をカン`;
   if (action.action === 'chi') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をチー`;
@@ -592,6 +593,8 @@ function comparisonParts(view, analysis) {
     .slice(0, 8);
   const parts = [];
   const slowerNames = [];
+  const valueHonorEquals = [];
+  const plainHonorEquals = [];
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
     const name = tileName(tile.kind, tile.red);
@@ -604,14 +607,17 @@ function comparisonParts(view, analysis) {
     // 判断の分かれる字牌の対案は必ず具体的に言う(2026-08-19指定:
     // 「なんで南や白じゃないのか」を曖昧語でなく牌ごとの理由で説明する)
     if (isHonor(tile.kind) && delta >= 0 && delta <= 2) {
+      // ドラの字牌を「役にならない字牌」と呼ばない(カルテ30号: ドラの北を誤説明)
+      const doraKinds = (view?.public?.doraIndicators ?? []).map(item => doraFromIndicator(item.kind));
+      if (doraKinds.includes(tile.kind)) {
+        parts.push(`${name}はドラの字牌です。切ると1翻ぶん打点を失うため残します（安全を最優先するときだけ手放す選択があります）。`);
+        continue;
+      }
+      // 同格の字牌が複数あるときは1文にまとめる(東・發・中を3回繰り返さない)
       if (valueHonor(tile, view)) {
-        parts.push(delta === 0
-          ? `${name}を切る案とは互角です。${name}はもう1枚重なると役として使える牌なので、その芽を見て${selectedName}を先にしましたが、${name}から切る選択もありです。`
-          : `${name}を切る案は受け入れが${delta}枚だけ狭くなります。${name}はもう1枚重なると役として使える牌でもあるので残しましたが、${name}から切る選択もありです。`);
+        valueHonorEquals.push(name);
       } else {
-        parts.push(delta === 0
-          ? `${name}を切る案とは互角です。${name}は役にならない字牌で伸びもないため、${selectedName}切りとの差はほぼありません。${name}から切る選択もありです。`
-          : `${name}は役にならない字牌なので早めに手放す考え方もあります。受け入れが${delta}枚狭くなるぶん${selectedName}を先にしましたが、${name}から切る選択もありです。`);
+        plainHonorEquals.push(name);
       }
       continue;
     }
@@ -659,6 +665,16 @@ function comparisonParts(view, analysis) {
       continue;
     }
   }
+  if (valueHonorEquals.length === 1) {
+    parts.push(`${valueHonorEquals[0]}を切る案とは互角です。${valueHonorEquals[0]}はもう1枚重なると役として使える牌なので、その芽を見て${selectedName}を先にしましたが、${valueHonorEquals[0]}から切る選択もありです。`);
+  } else if (valueHonorEquals.length >= 2) {
+    parts.push(`${valueHonorEquals.join('・')}を切る案ともほぼ互角です。いずれももう1枚重なると役として使える牌なので後に回しましたが、これらから切る選択もありです。`);
+  }
+  if (plainHonorEquals.length === 1) {
+    parts.push(`${plainHonorEquals[0]}を切る案とは互角です。${plainHonorEquals[0]}は役にならない字牌で伸びもないため、${selectedName}切りとの差はほぼありません。${plainHonorEquals[0]}から切る選択もありです。`);
+  } else if (plainHonorEquals.length >= 2) {
+    parts.push(`${plainHonorEquals.join('・')}はいずれも役にならない字牌で、${selectedName}切りとの差はほぼありません。これらから切る選択もありです。`);
+  }
   if (slowerNames.length === 1) {
     parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);
   } else if (slowerNames.length >= 2 && slowerNames.length <= 3) {
@@ -680,6 +696,8 @@ function turnExplanationParts(view, analysis) {
 
   if (action?.action === 'tsumo') {
     sentences.push('今はあがれる形です。点棒と順位の条件を見ても、ここで終わらせるのが自然です。');
+  } else if (action?.action === 'ankan') {
+    sentences.push(`${Number.isInteger(action.kind) ? tileName(action.kind) : 'この牌'}の暗カンを勧めます。手の向聴も受け入れも狭めずに、ドラ表示が1枚増えて符も上がるため、得の方が大きいカンです。`);
   } else if (action?.action === 'discard') {
     if (action.riichi) sentences.push('この牌を切ると、待ちを残したままリーチできます。');
     // リーチ保留 (カルテ26号): 「切る牌」と「リーチするか」は別の判断として説明する
@@ -706,7 +724,7 @@ function turnExplanationParts(view, analysis) {
       const topPlan = selected?.metrics?.planEvaluation?.topPlans?.[0];
       const strongTanyao = topPlan?.code === 'TANYAO_PINFU' &&
         (topPlan.weight ?? 0) * (topPlan.value ?? 0) >= 0.45;
-      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、${strongTanyao ? 'タンヤオ・ピンフ系で3900点以上を狙う方が本線' : '手なりでテンパイへ進む方が価値が高い'}ので、序盤のうちに切ります。`);
+      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、${strongTanyao ? 'タンヤオ・ピンフ系で3900点以上を狙う方が本線なので' : '手なりでテンパイへ進む方が価値が高いので'}、序盤のうちに切ります。`);
     } else if (honor && !honor.value && honor.copies === 1) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
     } else if (honor && honor.value && honor.copies === 1) {

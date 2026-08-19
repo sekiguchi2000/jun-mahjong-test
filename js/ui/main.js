@@ -7,7 +7,7 @@ import { ComActor } from '../engine/ai.js?v=18';
 import { canDeclareRiichi } from '../engine/legal-actions.js';
 import { createDealerCeremony } from '../engine/opening-dealer.js?v=17';
 import { buildRoundReview } from '../engine/review-evaluator.js?v=18';
-import { toCounts, suitOf, tileName } from '../engine/tiles.js';
+import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.js';
 import { svgFace } from './tilesvg.js?v=10';
 import { concealedTileCuboid } from './tile-cuboid.js?v=2';
 import { createTabletopPlacement, decorateMeldSlot } from './tabletop-projection.js?v=1';
@@ -656,7 +656,10 @@ class UI {
         };
         const keep = (metrics.planEvaluation?.notes ?? [])
           .map(note => NOTE_PHRASES[note]).find(Boolean);
-        if (isHonorTile && isValueHonor) {
+        const rowDoraKinds = (view?.public?.doraIndicators ?? []).map(item => doraFromIndicator(item.kind));
+        if (isHonorTile && rowDoraKinds.includes(kind)) {
+          explanation = `${name}はドラの字牌。切ると1翻失うため残します。`;
+        } else if (isHonorTile && isValueHonor) {
           explanation = `${name}は重なれば役（1翻）になる牌。その芽を見て${selectedName}を先にしますが、${name}から切る選択もありです。`;
         } else if (isHonorTile) {
           explanation = `${name}は役にならない字牌で、${selectedName}切りとほぼ互角です。${name}から切る選択もありです。`;

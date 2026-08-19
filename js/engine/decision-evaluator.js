@@ -752,11 +752,14 @@ function discardCandidate({
         }
       }
       const pressure = threats.length > 0 || (context.pressureSignals?.length ?? 0) > 0;
+      // 残り20枚以下は変化を待つ時間がない=薄くてもリーチで裏・一発を取りにいく
+      // (気配相手がいる場合の保留だけは残す=降りられる形を保つ)
+      const timeLeft = (view.public?.remaining ?? 99) > 20;
       const holdBack = holdPolicy === 'upgrade'
-        ? upgradeLive >= 8
+        ? (upgradeLive >= 8 && timeLeft)
         : holdPolicy === 'balanced'
-          ? (upgradeLive >= 6 || (pressure && upgradeLive >= 3))
-          : (upgradeLive >= 4 || pressure);
+          ? ((upgradeLive >= 6 && timeLeft) || (pressure && upgradeLive >= 3))
+          : ((upgradeLive >= 4 && timeLeft) || pressure);
       if (holdBack) {
         declareRiichi = false;
         riichiEvaluation = {
@@ -1091,23 +1094,52 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   if (optionSet.has('ankan')) {
     const counts = toCounts(handAll);
     const before = cachedShanten(shantenCache, counts, meldCount);
+    // 受け入れ枚数の比較 (カルテ30号): 向聴が同じでも受け入れが減るカンは
+    // 形を狭める(6666p+7pの67p潰し等)。カンする側としない側の受け入れを数える
+    const visibleForKan = visibleCounts(view);
+    const acceptanceOf = (tileCounts, melds) => {
+      const baseline = cachedShanten(shantenCache, tileCounts, melds);
+      let acceptance = 0;
+      for (let draw = 0; draw < KIND_COUNT; draw++) {
+        if (tileCounts[draw] >= 4) continue;
+        tileCounts[draw]++;
+        if (cachedShanten(shantenCache, tileCounts, melds) < baseline) {
+          acceptance += remainingCopies(visibleForKan, draw);
+        }
+        tileCounts[draw]--;
+      }
+      return acceptance;
+    };
     let selected = null;
     for (let kind = 0; kind < KIND_COUNT; kind++) {
       if (counts[kind] !== 4) continue;
       counts[kind] = 0;
       const after = cachedShanten(shantenCache, counts, meldCount + 1);
+      const kanAcceptance = acceptanceOf(counts, meldCount + 1);
       counts[kind] = 4;
+      // カンしない側: 4枚目を持ったまま最良の打牌をした13枚の受け入れ
+      let keepAcceptance = -1;
+      for (let out = 0; out < KIND_COUNT; out++) {
+        if (counts[out] === 0) continue;
+        counts[out]--;
+        if (cachedShanten(shantenCache, counts, meldCount) <= before) {
+          keepAcceptance = Math.max(keepAcceptance, acceptanceOf(counts, meldCount));
+        }
+        counts[out]++;
+      }
+      const shapeSafe = after < before || (after === before && kanAcceptance >= keepAcceptance);
       const candidate = {
         candidateId: `ankan:${kind}`,
         action: { action: 'ankan', kind },
         legal: true,
         allowed: true,
         utility: 800000 + before - after,
-        metrics: { kind, beforeShanten: before, afterShanten: after },
-        reasons: [after <= before ? 'SHANTEN_NOT_WORSE' : 'SHANTEN_WORSE'],
+        metrics: { kind, beforeShanten: before, afterShanten: after, kanAcceptance, keepAcceptance },
+        reasons: [after > before ? 'SHANTEN_WORSE'
+          : (shapeSafe ? 'SHANTEN_NOT_WORSE' : 'ACCEPTANCE_WORSE')],
       };
       candidates.push(candidate);
-      if (!selected && after <= before) selected = candidate;
+      if (!selected && shapeSafe && after <= before) selected = candidate;
     }
     if (selected) {
       return finalizeAnalysis({
@@ -1376,7 +1408,7 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     }
     const { runCount } = decomposeBlocks(view.hand ?? [], {});
     const toitoiRoute = !ankoComplete && counts[kind] >= 2 && chiMelds === 0 &&
-      (pairs + ponLikeMelds) >= style.ponPairMin && runCount === 0 &&
+      pairs >= 2 && (pairs + ponLikeMelds) >= style.ponPairMin && runCount === 0 &&
       (speedsUp || toitoiImproves);
     const pon = {
       candidateId: `pon:${kind}`, action: { action: 'pon' }, legal: true,
