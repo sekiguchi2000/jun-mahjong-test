@@ -49,7 +49,7 @@
         <h1><span>純</span><span>麻雀</span></h1>
         <p class="subtitle">牌を読む。相手を読む。一局ずつ、強くなる。</p>
       </header>
-      <div class="opponent-line title-rivals" aria-label="対局相手: 半蔵、ジョー、ひめ子">
+      <div class="opponent-line title-rivals" id="title-rivals" aria-label="対局相手">
         <span class="title-rival"><span class="opponent-portrait hanzou"></span><small>半蔵</small></span>
         <span class="title-rival"><span class="opponent-portrait joe"></span><small>ジョー</small></span>
         <span class="title-rival"><span class="opponent-portrait himeko"></span><small>ひめ子</small></span>
@@ -68,6 +68,19 @@
               <input id="coach-mode-toggle" type="checkbox" role="switch">
               <span class="learning-switch" aria-hidden="true"></span>
             </label>
+          </fieldset>
+          <fieldset class="opponent-picker" id="opponent-picker">
+            <legend>対戦相手（COMを選べます）</legend>
+            <label class="opponent-slot">右の相手
+              <select id="opponent-select-1" aria-label="右の相手"></select>
+            </label>
+            <label class="opponent-slot">正面の相手
+              <select id="opponent-select-2" aria-label="正面の相手"></select>
+            </label>
+            <label class="opponent-slot">左の相手
+              <select id="opponent-select-3" aria-label="左の相手"></select>
+            </label>
+            <p id="opponent-descriptions" class="opponent-descriptions" aria-live="polite"></p>
           </fieldset>
           <button id="btn-rules" class="btn big">ルール設定</button>
           <button id="btn-stats" class="btn big">成績・分析</button>
@@ -283,7 +296,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=59"></script>
+<script type="module" src="js/ui/main.js?v=60"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>

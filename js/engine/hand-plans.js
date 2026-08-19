@@ -168,6 +168,28 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     });
   }
 
+  // --- サワカ特殊プラン (context.specialPlans=true のキャラ専用) ---
+  if (context.specialPlans === true) {
+    // 国士無双: 么九牌7種以上で一直線
+    let yaochuKindCount = 0;
+    for (let kind = 0; kind < KIND_COUNT; kind++) {
+      if (counts[kind] >= 1 && (isHonor(kind) || isTerminal(kind))) yaochuKindCount++;
+    }
+    if (melds.length === 0 && yaochuKindCount >= 7) {
+      plans.push({ code: 'KOKUSHI', weight: Math.min(1, (yaochuKindCount - 6) / 5), value: 3, notes: [] });
+    }
+    // 大三元・小三元: 三元牌3種があり、うち2種以上が対子以上
+    const dragonKinds = [31, 32, 33].filter(kind => counts[kind] >= 1).length;
+    const dragonPairs = [31, 32, 33].filter(kind => counts[kind] >= 2).length;
+    if (dragonKinds === 3 && dragonPairs >= 2) {
+      plans.push({ code: 'SANGEN', weight: 0.9, value: 2.5, notes: [] });
+    }
+    // ホンイツ前のめり: 一色+字牌が8枚あれば通常閾値(9枚)を待たずに立てる
+    if (flushSize >= 8 && suitCounts[bestSuit] >= 5 && !plans.some(plan => plan.code === 'HONITSU')) {
+      plans.push({ code: 'HONITSU', suit: bestSuit, weight: 0.8, value: 1.6, notes: [] });
+    }
+  }
+
   // --- 形式テンパイ (2026-08-20ユーザー裁定①): 2副露以上で役の道が細い手は、
   // 流局時のテンパイ料を目標に切り替える。タンヤオ遠い(么九・字が2枚以上 or
   // 么九副露)・役牌の当てなし・染め/トイトイ/チャンタなし、が条件 ---
@@ -301,6 +323,16 @@ function planSupportForTile(plan, tile, counts, context) {
       return counts[kind] >= 2 ? { support: 0.8, notes: [] } : { support: 0, notes: [] };
     case 'TOITOI':
       return counts[kind] >= 2 ? { support: 0.9, notes: [] } : { support: 0, notes: [] };
+    case 'KOKUSHI':
+      if (isHonor(kind) || isTerminal(kind)) {
+        return { support: counts[kind] >= 2 ? 1.3 : 1.1, notes: [] };
+      }
+      return { support: 0, notes: [] };
+    case 'SANGEN': {
+      if (kind >= 31) return { support: 1.3, notes: [] };
+      if (isHonor(kind)) return { support: 0.2, notes: [] };
+      return { support: simpleTileSupport(kind) * 0.5, notes: [] };
+    }
     default:
       return { support: 0, notes: [] };
   }

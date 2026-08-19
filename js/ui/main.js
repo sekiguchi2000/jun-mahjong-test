@@ -29,6 +29,7 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=1';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
@@ -287,9 +288,30 @@ class PacedCom extends ComActor {
 
 // ============ UI本体 ============
 const WIND_NAMES = ['東', '南', '西', '北'];
-const SEAT_LABELS = ['あなた', '半蔵', 'ジョー', 'ひめ子'];
-const SEAT_TAGLINES = ['あなたの手番', '守備型・危険牌を切らない', '効率型・受入枚数を最大化', '攻撃型・鳴いて速度を上げる'];
-const COM_PROFILES = [null, 'guardian', 'analyst', 'striker'];
+let SEAT_LABELS = ['あなた', '半蔵', 'ジョー', 'ひめ子'];
+let SEAT_TAGLINES = ['あなたの手番', '守備型・危険牌を切らない', '効率型・受入枚数を最大化', '攻撃型・鳴いて速度を上げる'];
+let COM_PROFILES = [null, 'guardian', 'analyst', 'striker'];
+let SEAT_PORTRAITS = [null, 'hanzou', 'joe', 'himeko'];
+let SEAT_VOICES = [null, 'hanzo', 'joe', 'himeko'];
+
+// 対戦相手の選択(拡張可能なCOMキャラレジストリから3席分)
+const OPPONENTS_STORAGE_KEY = 'jun-opponents-v1';
+function loadOpponentSelection(storage) {
+  try {
+    const raw = storage?.getItem(OPPONENTS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (Array.isArray(parsed) && parsed.length === 3 && parsed.every(id => characterById(id))) return parsed;
+  } catch { /* 破損時は既定へ */ }
+  return [...DEFAULT_OPPONENTS];
+}
+function applyOpponentSelection(ids) {
+  const characters = ids.map(id => characterById(id));
+  SEAT_LABELS = ['あなた', ...characters.map(character => character.name)];
+  SEAT_TAGLINES = ['あなたの手番', ...characters.map(character => character.tagline)];
+  COM_PROFILES = [null, ...characters.map(character => character.profile)];
+  SEAT_PORTRAITS = [null, ...characters.map(character => character.portrait ?? 'generic')];
+  SEAT_VOICES = [null, ...characters.map(character => character.voice ?? null)];
+}
 
 class UI {
   constructor() {
@@ -349,6 +371,7 @@ class UI {
     });
     this.initNoCallsControl();
     this.initLearningModeControls();
+    this.initOpponentControls();
     this.initAudioControls();
     this.initCoachDetailControls();
     this.initCoachControls();
@@ -377,6 +400,56 @@ class UI {
     if (control) control.dataset.state = this.noCalls ? 'success' : 'default';
   }
 
+
+  initOpponentControls() {
+    this.opponents = loadOpponentSelection(this.preferenceStorage);
+    applyOpponentSelection(this.opponents);
+    const selects = [1, 2, 3].map(seat => $(`#opponent-select-${seat}`));
+    const descriptions = $('#opponent-descriptions');
+    const rivals = $('#title-rivals');
+    const refresh = () => {
+      const characters = this.opponents.map(id => characterById(id));
+      if (descriptions) {
+        descriptions.textContent = characters
+          .map(character => character.name + ': ' + character.description).join('\n');
+      }
+      if (rivals) {
+        rivals.replaceChildren();
+        for (const character of characters) {
+          const span = document.createElement('span');
+          span.className = 'title-rival';
+          const portrait = document.createElement('span');
+          portrait.className = `opponent-portrait ${character.portrait ?? 'generic'}`;
+          if (!character.portrait || character.portrait === 'generic') {
+            portrait.classList.add('generic');
+            portrait.dataset.initial = character.name[0];
+          }
+          const small = document.createElement('small');
+          small.textContent = character.name;
+          span.append(portrait, small);
+          rivals.appendChild(span);
+        }
+      }
+    };
+    selects.forEach((select, index) => {
+      if (!select) return;
+      select.replaceChildren();
+      for (const character of COM_CHARACTERS) {
+        const option = document.createElement('option');
+        option.value = character.id;
+        option.textContent = `${character.name} — ${character.tagline}`;
+        select.appendChild(option);
+      }
+      select.value = this.opponents[index];
+      select.addEventListener('change', () => {
+        this.opponents[index] = select.value;
+        try { this.preferenceStorage?.setItem(OPPONENTS_STORAGE_KEY, JSON.stringify(this.opponents)); } catch { /* 保存不可でも続行 */ }
+        applyOpponentSelection(this.opponents);
+        refresh();
+      });
+    });
+    refresh();
+  }
 
   initLearningModeControls() {
     const sync = () => {
@@ -1163,9 +1236,9 @@ class UI {
     this.game = new Game(rules,
       [
         seat0,
-        new PacedCom('半蔵', 'guardian', this),
-        new PacedCom('ジョー', 'analyst', this),
-        new PacedCom('ひめ子', 'striker', this),
+        new PacedCom(SEAT_LABELS[1], COM_PROFILES[1], this),
+        new PacedCom(SEAT_LABELS[2], COM_PROFILES[2], this),
+        new PacedCom(SEAT_LABELS[3], COM_PROFILES[3], this),
       ],
       (type, data) => this.onEvent(type, data),
       {
@@ -1229,7 +1302,7 @@ class UI {
   }
 
   playCharacterVoice(player, cue, { critical = false } = {}) {
-    const character = CHARACTER_AUDIO_IDS[player];
+    const character = SEAT_VOICES[player];
     if (!character || typeof cue !== 'string' || cue === '') return;
     void this.audio.playVoice(`${character}.${cue}`, { critical });
   }
@@ -1725,7 +1798,7 @@ class UI {
       const chip = $(`#chip-${p}`);
       chip.className = 'chip seat-' + p + ' ' + ['bl', 'br', 'tr', 'tl'][p] + (state.turn === p ? ' active' : '');
       chip.innerHTML =
-        `<div class="who"><span class="avatar ${p === 0 ? 'you' : ['hanzou', 'joe', 'himeko'][p - 1]}"></span><span><span class="wind${p === state.dealer ? ' dealer' : ''}">${seatWind}</span>${SEAT_LABELS[p]}<small>${SEAT_TAGLINES[p]}</small></span></div>` +
+        `<div class="who"><span class="avatar ${p === 0 ? 'you' : (SEAT_PORTRAITS[p] ?? 'generic')}" data-initial="${p === 0 ? '' : (SEAT_LABELS[p] ?? '?')[0]}"></span><span><span class="wind${p === state.dealer ? ' dealer' : ''}">${seatWind}</span>${SEAT_LABELS[p]}<small>${SEAT_TAGLINES[p]}</small></span></div>` +
         `<div class="pts">${state.points[p]}</div>` +
         (pl.riichi ? '<span class="riichi-state">立直</span>' : '');
 

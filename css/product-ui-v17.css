@@ -807,3 +807,57 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
   font-size: 0.74rem;
   color: #9fb0bb;
 }
+
+/* ---------- 対戦相手ピッカー + 汎用アバター (2026-08-20) ---------- */
+.opponent-picker {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(214, 178, 94, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 10px;
+}
+.opponent-picker legend {
+  padding: 0 6px;
+  font-size: 0.85rem;
+  color: #d6b25e;
+}
+.opponent-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.85rem;
+}
+.opponent-slot select {
+  flex: 1;
+  max-width: 70%;
+  min-height: 40px;
+  border-radius: 8px;
+  background: rgba(12, 22, 34, 0.85);
+  color: inherit;
+  border: 1px solid rgba(214, 178, 94, 0.35);
+  padding: 6px 8px;
+}
+.opponent-descriptions {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: #9fb0bb;
+  white-space: pre-line;
+}
+.opponent-portrait.generic,
+.avatar.generic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #23405a, #101d2c);
+  border: 1px solid rgba(214, 178, 94, 0.45);
+  color: #e8d9ac;
+  font-weight: 800;
+}
+.opponent-portrait.generic::after,
+.avatar.generic::after {
+  content: attr(data-initial);
+  font-size: 1.05em;
+}

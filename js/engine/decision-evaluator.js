@@ -45,6 +45,21 @@ export const AI_STYLES = Object.freeze({
     foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6,
     planWeight: 1.3, riichiHoldPolicy: 'upgrade', spiritualRules: true,
   }),
+  // COMキャラ用 (2026-08-20): ダイスケ=脇目もふらぬ最速+必ずカン
+  daisuke: Object.freeze({
+    foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', kanEager: true,
+  }),
+  // 陳=絶対リーチしないダマ職人。テンパイからでも降りる。内側から捨てる癖
+  chen: Object.freeze({
+    foldAt: 0, riichiLiveMin: 99, ponPairMin: 4, cautionWeight: 1.8,
+    riichiHoldPolicy: 'never', neverRiichi: true, planWeight: 0.6, innerFirstDrop: true,
+  }),
+  // サワカ=手役ロマン派(国士/大三元/ホンイツ即断/四暗刻ロン拒否)。南場沈みで攻め化
+  sawaka: Object.freeze({
+    foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
+    riichiHoldPolicy: 'balanced', specialPlans: true, suuankouGreed: true, southRankAttack: true,
+  }),
 });
 
 export const GUIDE_STYLES = Object.freeze([
@@ -684,6 +699,10 @@ function discardCandidate({
         -(PLAN_SCALE * deepShantenBoost * planEvaluation.retention * tenpaiAttenuation * valueBias * stylePlanWeight);
     }
   }
+  // 陳: カンチャン・ペンチャン落としは内側の牌から(同点時のみ効く微小差)
+  if (style.innerFirstDrop && !isHonor(tile.kind)) {
+    utilityAdjustments.innerFirstBias = 0.005 * (4 - Math.abs(numOf(tile.kind) - 5));
+  }
   const utilityAdjustment = Object.values(utilityAdjustments)
     .reduce((sum, adjustment) => sum + adjustment, 0);
   // v12.6: 向聴数が深いほど「生の受け入れ枚数」の信頼度を割り引く。
@@ -709,7 +728,7 @@ function discardCandidate({
       byKind: liveWaitsByKind,
       requiredMinimum: style.riichiLiveMin,
     };
-    declareRiichi = liveWaits >= style.riichiLiveMin;
+    declareRiichi = liveWaits >= style.riichiLiveMin && style.neverRiichi !== true;
     // リーチ保留 (カルテ26号): 2筒切りテンパイでも「リーチするかは別の話」。
     // 待ちが薄く、手に成長余地(タンヤオ化・待ちの良形化)があるか場に圧があるなら、
     // 手を固定するリーチを控えてダマで様子を見る。効率モードだけは常に即リーチ。
@@ -1030,7 +1049,11 @@ function turnFacts(view, options, handAll, meldCount, currentShanten, threats, c
 
 export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   const normalizedProfile = normalizeProfile(profile);
-  const style = AI_STYLES[normalizedProfile];
+  let style = AI_STYLES[normalizedProfile];
+  // サワカ: 南場で3位/4位なら攻め思考へ切替(特殊フラグは維持)
+  if (style.southRankAttack && view.roundWind === 28 && (view.placement?.currentRank ?? 0) >= 2) {
+    style = { ...AI_STYLES.attack, specialPlans: style.specialPlans, suuankouGreed: style.suuankouGreed };
+  }
   const optionSet = new Set(options);
   const shantenCache = new Map();
   const handAll = view.drawn ? [...view.hand, view.drawn] : [...view.hand];
@@ -1042,6 +1065,7 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
     .map(threat => ({ ...threat, passedKinds: passedKindsForThreat(view, threat.pl) }));
   const context = strategicContext(view);
   // プラン列挙は手牌全体から1回だけ (各打牌候補で共有)
+  context.planContext.specialPlans = style.specialPlans === true;
   context.plans = evaluateHandPlans(handAll, view.melds ?? [], context.planContext);
   // 打点対比 (カルテ21号): 公開情報から相手リーチの高さと自手の安さを見積もり、
   // 押し引きペナルティのスケールにする。カン(ドラ表示増=裏ドラも倍)は高打点の気配
@@ -1151,7 +1175,9 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
         }
         counts[out]++;
       }
-      const shapeSafe = after < before || (after === before && kanAcceptance >= keepAcceptance);
+      const shapeSafe = style.kanEager
+        ? (before > 0 || after <= 0)
+        : (after < before || (after === before && kanAcceptance >= keepAcceptance));
       const candidate = {
         candidateId: `ankan:${kind}`,
         action: { action: 'ankan', kind },
@@ -1163,7 +1189,7 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
           : (shapeSafe ? 'SHANTEN_NOT_WORSE' : 'ACCEPTANCE_WORSE')],
       };
       candidates.push(candidate);
-      if (!selected && shapeSafe && after <= before) selected = candidate;
+      if (!selected && shapeSafe && (style.kanEager || after <= before)) selected = candidate;
     }
     if (selected) {
       return finalizeAnalysis({
@@ -1236,7 +1262,7 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   // 降りの閾値を1段早める(analystは1向聴から降り)。テンパイからは降ろさない
   const highContrast = context.threatValue &&
     context.threatValue.threatScale >= 1.3 && context.threatValue.cheapScale >= 1.15;
-  const effectiveFoldAt = highContrast ? Math.max(1, style.foldAt - 1) : style.foldAt;
+  const effectiveFoldAt = highContrast ? Math.min(style.foldAt, Math.max(1, style.foldAt - 1)) : style.foldAt;
   if (threats.length > 0 && currentShanten >= effectiveFoldAt && !view.riichi) {
     const safeChoice = pickSafeTileDetailed(handAll, threats, view, discardCandidates);
     if (safeChoice.index >= 0) {
@@ -1367,7 +1393,11 @@ function claimFacts(view, offer) {
 
 export function evaluateClaimDecision(view, offer, profile = 'analyst') {
   const normalizedProfile = normalizeProfile(profile);
-  const style = AI_STYLES[normalizedProfile];
+  let style = AI_STYLES[normalizedProfile];
+  // サワカ: 南場で3位/4位なら攻め思考へ切替(特殊フラグは維持)
+  if (style.southRankAttack && view.roundWind === 28 && (view.placement?.currentRank ?? 0) >= 2) {
+    style = { ...AI_STYLES.attack, specialPlans: style.specialPlans, suuankouGreed: style.suuankouGreed };
+  }
   const forbiddenWin = offer.type === 'ron' && isForbiddenLastPlaceWin(offer.winPreview);
   const sanitizedWinPreview = copyKnown(offer.winPreview, WIN_PREVIEW_KEYS);
   const placement = copyKnown(view.placement, PLACEMENT_KEYS);
@@ -1395,6 +1425,19 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
   const candidates = [pass];
 
   if (offer.type === 'ron') {
+    const yakuNames = (offer.winPreview?.score?.yaku ?? []).map(item => item.name);
+    const suuankouWait = style.suuankouGreed &&
+      yakuNames.includes('三暗刻') && yakuNames.includes('対々和') &&
+      !yakuNames.includes('四暗刻');
+    if (suuankouWait && !forbiddenWin) {
+      return finalizeAnalysis({
+        profile: normalizedProfile,
+        phase: 'claim', facts, hardConstraints,
+        candidates: [pass], selected: pass, coverage,
+        decisiveFactors: [{ code: 'SUUANKOU_GREED' }],
+        legacyTrace: { phase: 'claim', reason: 'SUUANKOU_GREED', placement },
+      });
+    }
     const ron = {
       candidateId: 'ron', action: { action: 'ron' }, legal: true,
       allowed: !forbiddenWin, utility: forbiddenWin ? -1000000 : 1000000,
@@ -1487,11 +1530,24 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
   }
 
   if (offer.canKan) {
-    candidates.push({
+    const minkan = {
       candidateId: `minkan:${offer.tile.kind}`, action: { action: 'minkan' },
       legal: true, allowed: true, utility: -100, metrics: { evaluated: false },
       reasons: ['BASELINE_MINKAN_NOT_EVALUATED'],
-    });
+    };
+    candidates.push(minkan);
+    if (style.kanEager) {
+      const before = shanten(counts, (view.melds ?? []).length);
+      const afterCounts = counts.slice();
+      afterCounts[offer.tile.kind] = Math.max(0, afterCounts[offer.tile.kind] - 3);
+      const after = shanten(afterCounts, (view.melds ?? []).length + 1);
+      if (before > 0 || after <= 0) {
+        minkan.utility = 1100;
+        minkan.reasons = ['KAN_EAGER'];
+        minkan.metrics = { kind: offer.tile.kind, evaluated: true };
+        selected = minkan;
+      }
+    }
   }
   for (const tiles of offer.canChi ?? []) {
     candidates.push({
