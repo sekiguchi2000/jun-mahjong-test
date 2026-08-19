@@ -49,6 +49,11 @@
         <h1><span>純</span><span>麻雀</span></h1>
         <p class="subtitle">牌を読む。相手を読む。一局ずつ、強くなる。</p>
       </header>
+      <div class="title-progression" id="title-progression" aria-label="レベルと経験値">
+        <span id="title-level" class="title-level"></span>
+        <div class="level-bar" aria-hidden="true"><i id="title-level-fill"></i></div>
+        <span id="title-exp" class="title-exp"></span>
+      </div>
       <div class="opponent-line title-rivals" id="title-rivals" aria-label="対局相手">
         <span class="title-rival"><span class="opponent-portrait hanzou"></span><small>半蔵</small></span>
         <span class="title-rival"><span class="opponent-portrait joe"></span><small>ジョー</small></span>
@@ -64,7 +69,7 @@
           <fieldset class="learning-mode-picker">
             <legend>LEARNING TABLE</legend>
             <label class="learning-mode-option" for="coach-mode-toggle">
-              <span class="learning-mode-copy"><strong>打ち手ガイド</strong><small>あなたと同じ公開情報だけで選択を解説</small></span>
+              <span class="learning-mode-copy"><strong>打ち手ガイド</strong><small>あなたと同じ公開情報だけで選択を解説</small><small id="coach-mode-lock-note" class="coach-lock-note hidden">Lv2で解禁されます</small></span>
               <input id="coach-mode-toggle" type="checkbox" role="switch">
               <span class="learning-switch" aria-hidden="true"></span>
             </label>
@@ -84,6 +89,7 @@
           </fieldset>
           <button id="btn-rules" class="btn big">ルール設定</button>
           <button id="btn-stats" class="btn big">成績・分析</button>
+          <button id="btn-achievements" class="btn big">アチーブメント</button>
         </div>
       </details>
       <p id="title-session-status" class="session-status" role="status" aria-live="polite"></p>
@@ -240,6 +246,18 @@
   </section>
 </dialog>
 
+<dialog id="achievements-dialog" aria-labelledby="achievements-title">
+  <section class="stats-shell">
+    <header class="stats-header">
+      <div><small>ACHIEVEMENTS</small><h2 id="achievements-title">アチーブメント</h2></div>
+    </header>
+    <div id="achievements-body" class="stats-body"></div>
+    <footer class="stats-footer">
+      <button id="achievements-close" class="btn primary big" type="button">閉じる</button>
+    </footer>
+  </section>
+</dialog>
+
 <dialog id="pause-dialog" aria-labelledby="pause-title" data-gamepad-scope="pause">
   <section class="pause-shell">
     <header class="pause-header">
@@ -296,7 +314,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=60"></script>
+<script type="module" src="js/ui/main.js?v=61"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>

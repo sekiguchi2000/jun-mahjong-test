@@ -30,6 +30,11 @@ import {
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=1';
+import {
+  ProgressionTracker, loadProgression, levelFromExp, levelLabel, levelProgress,
+  isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
+  clampRulesToLevel, ruleValueUnlockLevel, achievementRows, UNLOCKS,
+} from '../engine/progression.js?v=1';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
@@ -46,7 +51,9 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function loadRulesOverrides() {
   try { return JSON.parse(localStorage.getItem('mahjong-rules') || '{}'); } catch { return {}; }
 }
-function loadRules() { return makeRules(loadRulesOverrides()); }
+function currentPlayerLevel() { return levelFromExp(loadProgression().exp); }
+// 未解禁のルール値は実効値で「なし固定」に丸める(保存値は残すので解禁後に自動で有効化)
+function loadRules() { return clampRulesToLevel(makeRules(loadRulesOverrides()), currentPlayerLevel()); }
 function saveRules(overrides) {
   localStorage.setItem('mahjong-rules', JSON.stringify(overrides));
   void persistDesktopSettings(localStorage);
@@ -56,6 +63,7 @@ function renderRulesScreen() {
   const list = $('#rules-list');
   list.innerHTML = '';
   const current = loadRules();
+  const level = currentPlayerLevel();
   for (const item of RULE_SCHEMA) {
     const row = document.createElement('div');
     row.className = 'rule-item';
@@ -63,6 +71,16 @@ function renderRulesScreen() {
     label.textContent = item.label;
     row.appendChild(label);
     if (item.type === 'bool') {
+      const boolLockLevel = ruleValueUnlockLevel(item.key, true);
+      if (boolLockLevel > level) {
+        const btn = document.createElement('button');
+        btn.className = 'toggle locked';
+        btn.disabled = true;
+        btn.textContent = `なし（Lv${boolLockLevel}で解禁）`;
+        row.appendChild(btn);
+        list.appendChild(row);
+        continue;
+      }
       const btn = document.createElement('button');
       const paint = () => {
         btn.className = 'toggle' + (current[item.key] ? ' on' : '');
@@ -82,7 +100,13 @@ function renderRulesScreen() {
       for (const [val, name] of item.options) {
         const opt = document.createElement('option');
         opt.value = JSON.stringify(val);
-        opt.textContent = name;
+        const optionLockLevel = ruleValueUnlockLevel(item.key, val);
+        if (optionLockLevel > level) {
+          opt.disabled = true;
+          opt.textContent = `${name}（Lv${optionLockLevel}で解禁）`;
+        } else {
+          opt.textContent = name;
+        }
         if (JSON.stringify(current[item.key]) === JSON.stringify(val)) opt.selected = true;
         sel.appendChild(opt);
       }
@@ -334,6 +358,7 @@ class UI {
     const learningModes = readLearningModePreferences(this.preferenceStorage);
     this.coachMode = learningModes.coachMode;
     this.stats = new StatsTracker();
+    this.progression = new ProgressionTracker(this.preferenceStorage);
     this.calloutSequence = 0;
     this.riichiStickSequence = 0;
     this.winCinematicSequence = 0;
@@ -351,7 +376,9 @@ class UI {
     this.spiritualWinStreak = 0;
     this.guideStyle = (() => {
       const saved = localStorage.getItem('jun-guide-style-v1');
-      return GUIDE_STYLES.some(style => style.profile === saved) ? saved : 'balance';
+      const unlocked = GUIDE_STYLES.filter(style => isGuideUnlocked(style.profile, this.progression.level));
+      if (unlocked.some(style => style.profile === saved)) return saved;
+      return unlocked[0]?.profile ?? 'balance';
     })();
     this.activeRiichiCancel = null;
     this.activeHandBack = null;
@@ -402,7 +429,8 @@ class UI {
 
 
   initOpponentControls() {
-    this.opponents = loadOpponentSelection(this.preferenceStorage);
+    this.opponents = loadOpponentSelection(this.preferenceStorage)
+      .map((id, index) => isComUnlocked(id, this.progression.level) ? id : DEFAULT_OPPONENTS[index]);
     applyOpponentSelection(this.opponents);
     const selects = [1, 2, 3].map(seat => $(`#opponent-select-${seat}`));
     const descriptions = $('#opponent-descriptions');
@@ -431,16 +459,25 @@ class UI {
         }
       }
     };
-    selects.forEach((select, index) => {
+    const populate = () => selects.forEach((select, index) => {
       if (!select) return;
       select.replaceChildren();
       for (const character of COM_CHARACTERS) {
         const option = document.createElement('option');
         option.value = character.id;
-        option.textContent = `${character.name} — ${character.tagline}`;
+        const locked = !isComUnlocked(character.id, this.progression.level);
+        option.disabled = locked;
+        option.textContent = locked
+          ? `？？？ — Lv${comUnlockLevel(character.id)}で解禁`
+          : `${character.name} — ${character.tagline}`;
         select.appendChild(option);
       }
       select.value = this.opponents[index];
+    });
+    populate();
+    this.refreshOpponentGates = () => { populate(); refresh(); };
+    selects.forEach((select, index) => {
+      if (!select) return;
       select.addEventListener('change', () => {
         this.opponents[index] = select.value;
         try { this.preferenceStorage?.setItem(OPPONENTS_STORAGE_KEY, JSON.stringify(this.opponents)); } catch { /* 保存不可でも続行 */ }
@@ -451,16 +488,27 @@ class UI {
     refresh();
   }
 
+  guideFeatureLocked() {
+    return !GUIDE_STYLES.some(style => isGuideUnlocked(style.profile, this.progression.level));
+  }
+
   initLearningModeControls() {
     const sync = () => {
+      const locked = this.guideFeatureLocked();
+      if (locked && this.coachMode) { this.coachMode = false; this.hideCoach(); }
       for (const id of ['coach-mode-toggle', 'pause-coach-toggle']) {
         const control = $(`#${id}`);
-        if (control) control.checked = this.coachMode;
+        if (!control) continue;
+        control.checked = this.coachMode;
+        control.disabled = locked;
       }
+      const note = $('#coach-mode-lock-note');
+      if (note) note.classList.toggle('hidden', !locked);
     };
+    this.syncLearningModeControls = sync;
     const commit = changes => {
       if (Object.prototype.hasOwnProperty.call(changes, 'coachMode')) {
-        this.coachMode = changes.coachMode === true;
+        this.coachMode = changes.coachMode === true && !this.guideFeatureLocked();
         if (!this.coachMode) this.hideCoach();
       }
       writeLearningModePreferences(this.preferenceStorage, { coachMode: this.coachMode });
@@ -535,6 +583,9 @@ class UI {
     $('#are-report-button')?.addEventListener('click', () => this.recordAreReport());
     $('#pause-export-reports')?.addEventListener('click', () => this.exportAreReportsToFile());
     $('#btn-stats')?.addEventListener('click', () => this.openStatsDialog());
+    $('#btn-achievements')?.addEventListener('click', () => this.openAchievementsDialog());
+    $('#achievements-close')?.addEventListener('click', () => $('#achievements-dialog')?.close());
+    this.renderTitleProgression();
     $('#stats-close')?.addEventListener('click', () => $('#stats-dialog')?.close());
     $('#stats-clear')?.addEventListener('click', () => {
       if (!window.confirm('蓄積した成績をすべて削除します。よろしいですか?')) return;
@@ -783,8 +834,9 @@ class UI {
       section.appendChild(heading);
       const { options } = this.latestCoachContext ?? {};
       for (const style of GUIDE_STYLES) {
-        let recommendation = '—';
-        try {
+        const styleLocked = !isGuideUnlocked(style.profile, this.progression.level);
+        let recommendation = styleLocked ? `Lv${guideUnlockLevel(style.profile)}で解禁` : '—';
+        if (!styleLocked) try {
           const styled = offer
             ? buildClaimCoaching(view, offer, style.profile)
             : buildTurnCoaching(view, options ?? ['discard'], style.profile);
@@ -792,7 +844,8 @@ class UI {
         } catch { /* 未対応局面は伏せる */ }
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'coach-style-row' + (style.profile === this.guideStyle ? ' current' : '');
+        row.disabled = styleLocked;
+        row.className = 'coach-style-row' + (style.profile === this.guideStyle ? ' current' : '') + (styleLocked ? ' locked' : '');
         const label = document.createElement('span');
         label.className = 'coach-style-label';
         label.textContent = style.label;
@@ -979,6 +1032,83 @@ class UI {
       `持点${rules.startPoints}点`,
     ].join(' ／ ');
     $('#pause-save-status').textContent = '';
+  }
+
+  // --- Exp・Lv・アチーブメント (仕様: spec_document/) ---
+  progressionSummaryHtml(summary) {
+    const escapeHtml = value => String(value).replace(/[&<>"]/g, ch =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    let html = '<div class="exp-summary">';
+    html += `<div class="exp-total">獲得Exp <strong>+${summary.totalGained}</strong></div>`;
+    html += `<div class="exp-breakdown">基本 +${summary.base} ／ ハンボーナス +${summary.hanBonus}`
+      + (summary.hanTotal > 0 ? `（合計${summary.hanTotal}ハン）` : '')
+      + (summary.achievementExp > 0 ? ` ／ アチーブメント +${summary.achievementExp}` : '') + '</div>';
+    for (const entry of summary.achievements) {
+      html += `<div class="exp-achievement">🏆 ${escapeHtml(entry.label)} <span>+${entry.exp}</span></div>`;
+    }
+    if (summary.levelAfter > summary.levelBefore || (summary.janou && summary.levelBefore >= 99)) {
+      const after = summary.janou ? '雀王' : `Lv ${summary.levelAfter}`;
+      html += `<div class="exp-levelup">LEVEL UP! Lv ${summary.levelBefore} → ${after}</div>`;
+      for (const unlock of summary.unlocked) {
+        html += `<div class="exp-unlock">🔓 ${escapeHtml(unlock.label)} を解禁！</div>`;
+      }
+    }
+    html += `<div class="exp-now">現在 ${levelLabel(summary.exp)}（累計 ${summary.exp} Exp）</div>`;
+    html += '</div>';
+    return html;
+  }
+
+  renderTitleProgression() {
+    const data = this.progression.data;
+    const levelEl = $('#title-level');
+    if (levelEl) levelEl.textContent = levelLabel(data.exp);
+    const fill = $('#title-level-fill');
+    if (fill) {
+      const progress = levelProgress(data.exp);
+      fill.style.width = `${Math.min(100, progress.into / progress.need * 100).toFixed(1)}%`;
+    }
+    const expEl = $('#title-exp');
+    if (expEl) {
+      const progress = levelProgress(data.exp);
+      expEl.textContent = (data.exp >= 100000) ? `${data.exp} Exp` : `次のLvまで ${progress.need - progress.into} Exp`;
+    }
+  }
+
+  openAchievementsDialog() {
+    const dialog = $('#achievements-dialog');
+    if (!dialog || dialog.open) return;
+    this.renderAchievementsBody();
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+
+  renderAchievementsBody() {
+    const body = $('#achievements-body');
+    if (!body) return;
+    const rows = achievementRows(this.progression.data);
+    const level = this.progression.level;
+    const achievedCount = rows.filter(row => row.achieved).length;
+    let html = `<p class="achv-progress-line">達成 ${achievedCount} / ${rows.length}　現在 ${levelLabel(this.progression.data.exp)}（累計 ${this.progression.data.exp} Exp）</p>`;
+    for (const section of ['対局', '順位', '打点', '役']) {
+      const sectionRows = rows.filter(row => row.section === section);
+      html += `<section class="stats-section"><h3>${section}</h3><div class="achv-list">`;
+      for (const row of sectionRows) {
+        const progress = row.counter && !row.achieved ? `<span class="achv-count">${row.current}/${row.target}</span>` : '';
+        html += `<div class="achv-row${row.achieved ? ' achieved' : ''}">`
+          + `<span class="achv-label">${row.label}</span>${progress}`
+          + `<span class="achv-exp">${row.achieved ? '達成済' : `+${row.exp} Exp`}</span></div>`;
+      }
+      html += '</div></section>';
+    }
+    html += '<section class="stats-section"><h3>Lv解禁</h3><div class="achv-list">';
+    for (const unlock of UNLOCKS) {
+      const done = level >= unlock.level;
+      html += `<div class="achv-row${done ? ' achieved' : ''}">`
+        + `<span class="achv-label">${done ? unlock.label : (unlock.kind === 'com' ? `COM新キャラ「？？？」` : unlock.label)}</span>`
+        + `<span class="achv-exp">Lv ${unlock.level}${done ? ' 解禁済' : ''}</span></div>`;
+    }
+    html += '</div></section>';
+    body.innerHTML = html;
   }
 
   // --- 成績・分析画面 (データ蓄積はstats-store.js。見た目の仕上げはCodex担当予定) ---
@@ -1228,6 +1358,8 @@ class UI {
     this.spectate = location.search.includes('spectate'); // 開発用: 全員COMの観戦モード
     // 成績は人間として打つ新規対局のみ蓄積(観戦・途中再開の重複開始は除外)
     if (!this.spectate && !session) this.stats.startGame();
+    // Exp/アチーブメント: 再開時も追跡する(基本Expは終局結果だけで決まる。ハン合計は再開分から)
+    if (!this.spectate) this.progression.startGame();
     else this.stats.reset();
     this.human = new HumanActor(this);
     const seat0 = this.spectate ? new PacedCom('COM', 'analyst', this) : this.human;
@@ -1333,6 +1465,7 @@ class UI {
 
   setGuideStyle(profile) {
     if (!GUIDE_STYLES.some(style => style.profile === profile)) return;
+    if (!isGuideUnlocked(profile, this.progression.level)) return;
     this.guideStyle = profile;
     localStorage.setItem('jun-guide-style-v1', profile);
     const badge = $('#coach-style');
@@ -1344,9 +1477,10 @@ class UI {
   }
 
   cycleGuideStyle() {
-    const index = GUIDE_STYLES.findIndex(style => style.profile === this.guideStyle);
-    const next = GUIDE_STYLES[(index + 1) % GUIDE_STYLES.length];
-    this.setGuideStyle(next.profile);
+    const unlocked = GUIDE_STYLES.filter(style => isGuideUnlocked(style.profile, this.progression.level));
+    if (unlocked.length === 0) return;
+    const index = unlocked.findIndex(style => style.profile === this.guideStyle);
+    this.setGuideStyle(unlocked[(index + 1) % unlocked.length].profile);
   }
 
   showCoach(result, { view = null, offer = null, options = null } = {}) {
@@ -1440,6 +1574,7 @@ class UI {
         return;
       case 'roundStart':
         this.stats.startHand();
+        if (!this.spectate) this.progression.onRoundStart(data);
         this.lastDiscardPlayer = -1;
         this.lastDiscardRef = null;
         this.tabletopDrawnSeat = null;
@@ -1539,6 +1674,7 @@ class UI {
         return;
       case 'win':
         this.stats.onWin(data);
+        if (!this.spectate) this.progression.onWin(data);
         if (data.winner === 0) {
           this.spiritualWinStreak += 1;
           this.spiritualMood = this.spiritualWinStreak >= 2 ? 'streak' : 'win';
@@ -2564,6 +2700,18 @@ class UI {
       const finalScore = Math.round((data.points[0] - rules.returnPoints + uma + oka) / 1000);
       this.stats.finishGame({ ranking: data.ranking, points: data.points, finalScore });
     }
+    let progressionHtml = '';
+    if (!this.spectate) {
+      const summary = this.progression.finishGame({
+        myRank: data.ranking.indexOf(0),
+        myPoints: data.points[0],
+        gameLength: rules.gameLength,
+      });
+      if (summary) progressionHtml = this.progressionSummaryHtml(summary);
+      this.renderTitleProgression();
+      this.refreshOpponentGates?.();
+      this.syncLearningModeControls?.();
+    }
     let html = `<h2>終局</h2>`;
     data.ranking.forEach((p, rank) => {
       const uma = rules.uma[rank] * 1000;
@@ -2572,6 +2720,7 @@ class UI {
       html += `<div class="rank-line"><span>${rank + 1}位 ${SEAT_LABELS[p]}</span>` +
               `<span class="pt">${data.points[p]}点 (${finalPt >= 0 ? '+' : ''}${Math.round(finalPt / 1000)})</span></div>`;
     });
+    html += progressionHtml;
     html += `<button class="btn primary big" id="btn-title">タイトルへ</button>`;
     await this.showOverlayAwait(html, 'btn-title');
     await clearActiveSession(this.preferenceStorage).catch(error => {
