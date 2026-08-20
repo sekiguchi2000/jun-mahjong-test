@@ -29,7 +29,7 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
-import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=1';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=2';
 import {
   ProgressionTracker, loadProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
@@ -1038,34 +1038,51 @@ class UI {
   progressionSummaryHtml(summary) {
     const escapeHtml = value => String(value).replace(/[&<>"]/g, ch =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-    let html = '<div class="exp-summary">';
-    html += `<div class="exp-total">獲得Exp <strong>+${summary.totalGained}</strong></div>`;
-    html += `<div class="exp-breakdown">基本 +${summary.base} ／ ハンボーナス +${summary.hanBonus}`
-      + (summary.hanTotal > 0 ? `（合計${summary.hanTotal}ハン）` : '')
-      + (summary.achievementExp > 0 ? ` ／ アチーブメント +${summary.achievementExp}` : '') + '</div>';
+    let html = '<section class="exp-summary" aria-label="獲得経験値の内訳">';
+    html += `<div class="exp-total"><span>獲得Exp</span><strong>+${summary.totalGained}</strong></div>`;
+    html += '<div class="exp-breakdown">'
+      + `<span class="exp-breakdown-item">基本 <strong>+${summary.base}</strong></span>`
+      + '<span class="exp-breakdown-separator" aria-hidden="true">／</span>'
+      + `<span class="exp-breakdown-item">ハンボーナス <strong>+${summary.hanBonus}</strong>`
+      + (summary.hanTotal > 0 ? `（合計${summary.hanTotal}ハン）` : '') + '</span>'
+      + (summary.achievementExp > 0
+        ? '<span class="exp-breakdown-separator" aria-hidden="true">／</span>'
+          + `<span class="exp-breakdown-item">アチーブメント <strong>+${summary.achievementExp}</strong></span>`
+        : '')
+      + '</div>';
     for (const entry of summary.achievements) {
-      html += `<div class="exp-achievement">🏆 ${escapeHtml(entry.label)} <span>+${entry.exp}</span></div>`;
+      html += '<div class="exp-achievement">'
+        + '<span class="reward-mark reward-mark-medal" aria-hidden="true"></span>'
+        + `<span class="exp-achievement-label">${escapeHtml(entry.label)}</span><span>+${entry.exp}</span></div>`;
     }
     if (summary.levelAfter > summary.levelBefore || (summary.janou && summary.levelBefore >= 99)) {
       const after = summary.janou ? '雀王' : `Lv ${summary.levelAfter}`;
       html += `<div class="exp-levelup">LEVEL UP! Lv ${summary.levelBefore} → ${after}</div>`;
       for (const unlock of summary.unlocked) {
-        html += `<div class="exp-unlock">🔓 ${escapeHtml(unlock.label)} を解禁！</div>`;
+        html += '<div class="exp-unlock">'
+          + '<span class="reward-mark reward-mark-unlock" aria-hidden="true"></span>'
+          + `<span>${escapeHtml(unlock.label)} を解禁！</span></div>`;
       }
     }
     html += `<div class="exp-now">現在 ${levelLabel(summary.exp)}（累計 ${summary.exp} Exp）</div>`;
-    html += '</div>';
+    html += '</section>';
     return html;
   }
 
   renderTitleProgression() {
     const data = this.progression.data;
+    const meter = $('#title-progression');
+    if (meter) meter.dataset.janou = String(data.exp >= 100000);
     const levelEl = $('#title-level');
     if (levelEl) levelEl.textContent = levelLabel(data.exp);
     const fill = $('#title-level-fill');
     if (fill) {
       const progress = levelProgress(data.exp);
-      fill.style.width = `${Math.min(100, progress.into / progress.need * 100).toFixed(1)}%`;
+      const percent = Math.min(100, progress.into / progress.need * 100);
+      fill.style.width = `${percent.toFixed(1)}%`;
+      const bar = fill.closest('.level-bar');
+      bar?.setAttribute('aria-valuenow', percent.toFixed(1));
+      bar?.setAttribute('aria-valuetext', data.exp >= 100000 ? '雀王到達済み' : `次のレベルまで${progress.need - progress.into}Exp`);
     }
     const expEl = $('#title-exp');
     if (expEl) {
@@ -1088,13 +1105,16 @@ class UI {
     const rows = achievementRows(this.progression.data);
     const level = this.progression.level;
     const achievedCount = rows.filter(row => row.achieved).length;
-    let html = `<p class="achv-progress-line">達成 ${achievedCount} / ${rows.length}　現在 ${levelLabel(this.progression.data.exp)}（累計 ${this.progression.data.exp} Exp）</p>`;
+    let html = '<p class="achv-progress-line">'
+      + `<span class="achv-summary-count">達成 <strong>${achievedCount}</strong> / ${rows.length}</span>`
+      + `<span class="achv-summary-level">現在 ${levelLabel(this.progression.data.exp)}（累計 ${this.progression.data.exp} Exp）</span></p>`;
     for (const section of ['対局', '順位', '打点', '役']) {
       const sectionRows = rows.filter(row => row.section === section);
       html += `<section class="stats-section"><h3>${section}</h3><div class="achv-list">`;
       for (const row of sectionRows) {
         const progress = row.counter && !row.achieved ? `<span class="achv-count">${row.current}/${row.target}</span>` : '';
-        html += `<div class="achv-row${row.achieved ? ' achieved' : ''}">`
+        html += `<div class="achv-row${row.achieved ? ' achieved' : ''}" data-achievement-id="${row.id}">`
+          + '<span class="achv-status" aria-hidden="true"></span>'
           + `<span class="achv-label">${row.label}</span>${progress}`
           + `<span class="achv-exp">${row.achieved ? '達成済' : `+${row.exp} Exp`}</span></div>`;
       }
@@ -1103,7 +1123,8 @@ class UI {
     html += '<section class="stats-section"><h3>Lv解禁</h3><div class="achv-list">';
     for (const unlock of UNLOCKS) {
       const done = level >= unlock.level;
-      html += `<div class="achv-row${done ? ' achieved' : ''}">`
+      html += `<div class="achv-row${done ? ' achieved' : ''}" data-unlock-level="${unlock.level}">`
+        + '<span class="achv-status" aria-hidden="true"></span>'
         + `<span class="achv-label">${done ? unlock.label : (unlock.kind === 'com' ? `COM新キャラ「？？？」` : unlock.label)}</span>`
         + `<span class="achv-exp">Lv ${unlock.level}${done ? ' 解禁済' : ''}</span></div>`;
     }
@@ -2690,6 +2711,34 @@ class UI {
     await this.showOverlayAwait(html);
   }
 
+  gameEndResultHtml(data, rules, progressionHtml = '') {
+    let html = '<h2>終局</h2>';
+    data.ranking.forEach((p, rank) => {
+      const uma = rules.uma[rank] * 1000;
+      const oka = rank === 0 ? (rules.returnPoints - rules.startPoints) * 4 : 0;
+      const finalPt = data.points[p] - rules.returnPoints + uma + oka;
+      html += `<div class="rank-line"><span>${rank + 1}位 ${SEAT_LABELS[p]}</span>`
+        + `<span class="pt">${data.points[p]}点 (${finalPt >= 0 ? '+' : ''}${Math.round(finalPt / 1000)})</span></div>`;
+    });
+    html += progressionHtml;
+    html += '<button class="btn primary big" id="btn-title">タイトルへ</button>';
+    return html;
+  }
+
+  showProgressionCaptureResult() {
+    this.progression.startGame();
+    const summary = this.progression.finishGame({ myRank: 3, myPoints: 15000, gameLength: 'tonnan' });
+    if (!summary) throw new Error('Progression capture fixture could not be finalized.');
+    const rules = loadRules();
+    const data = { ranking: [1, 2, 3, 0], points: [15000, 40000, 25000, 20000] };
+    show('game');
+    void this.showOverlayAwait(
+      this.gameEndResultHtml(data, rules, this.progressionSummaryHtml(summary)),
+      'btn-title',
+    ).catch(() => {});
+    return summary;
+  }
+
   async showGameEnd(data) {
     const rules = this.game?.rules ?? loadRules();
     {
@@ -2712,17 +2761,7 @@ class UI {
       this.refreshOpponentGates?.();
       this.syncLearningModeControls?.();
     }
-    let html = `<h2>終局</h2>`;
-    data.ranking.forEach((p, rank) => {
-      const uma = rules.uma[rank] * 1000;
-      const oka = rank === 0 ? (rules.returnPoints - rules.startPoints) * 4 : 0;
-      const finalPt = data.points[p] - rules.returnPoints + uma + oka;
-      html += `<div class="rank-line"><span>${rank + 1}位 ${SEAT_LABELS[p]}</span>` +
-              `<span class="pt">${data.points[p]}点 (${finalPt >= 0 ? '+' : ''}${Math.round(finalPt / 1000)})</span></div>`;
-    });
-    html += progressionHtml;
-    html += `<button class="btn primary big" id="btn-title">タイトルへ</button>`;
-    await this.showOverlayAwait(html, 'btn-title');
+    await this.showOverlayAwait(this.gameEndResultHtml(data, rules, progressionHtml), 'btn-title');
     await clearActiveSession(this.preferenceStorage).catch(error => {
       console.warn('Completed session could not be cleared.', error);
     });
@@ -2764,6 +2803,12 @@ function initTitleAtmosphere() {
 async function bootstrap() {
   await hydrateDesktopSettings(window.localStorage);
   const uiInstance = new UI();
+  if (new URLSearchParams(location.search).get('progression-capture') === '1') {
+    Object.defineProperty(window, '__JUN_PROGRESSION_CAPTURE__', {
+      configurable: false,
+      value: Object.freeze({ showResult: () => uiInstance.showProgressionCaptureResult() }),
+    });
+  }
   initTitleAtmosphere();
   uiInstance.gamepadController = installGamepadController({ document, window });
   await uiInstance.refreshSavedSession();

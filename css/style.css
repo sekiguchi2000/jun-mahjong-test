@@ -32,6 +32,12 @@ body {
 .hanzou { background-image: url('../assets/gptimage_v1/hanzou_portrait_v1.png'); }
 .joe { background-image: url('../assets/gptimage_v1/joe_portrait_v1.png'); }
 .himeko { background-image: url('../assets/gptimage_v1/himeko_portrait_v1.png'); }
+.mamoru { background-image: url('../assets/gptimage_v9/mamoru_portrait_v2.png'); }
+.seitaro { background-image: url('../assets/gptimage_v9/seitaro_portrait_v1.png'); }
+.gouda { background-image: url('../assets/gptimage_v9/gouda_portrait_v2.png'); }
+.daisuke { background-image: url('../assets/gptimage_v9/daisuke_portrait_v1.png'); }
+.chen { background-image: url('../assets/gptimage_v9/chen_portrait_v1.png'); }
+.sawaka { background-image: url('../assets/gptimage_v9/sawaka_portrait_v2.png'); }
 .note { color: #7fa896; margin-top: 28px; font-size: 11px; line-height: 1.7; }
 
 .btn {

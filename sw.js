@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v82-progression';
+const CACHE = 'jun-mahjong-v84-com-portraits';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -13,10 +13,10 @@ const VOICE_CUES = [
 const VOICE_FILES = ['hanzo', 'joe', 'himeko']
   .flatMap(character => VOICE_CUES.map(cue => `assets/audio/voice/${character}/${cue}-v1.wav`));
 const ASSETS = [
-  '.', 'index.html', 'css/style.css?v=12', 'css/table-v9.css?v=16',
+  '.', 'index.html', 'css/style.css?v=13', 'css/table-v9.css?v=16',
   'css/tokens-v15.css?v=15', 'css/learning-modes-v15.css?v=17', 'css/product-ui-v16.css?v=1',
-  'css/product-ui-v17.css?v=1', 'css/are-report-v1.css?v=4', 'css/stats-v1.css?v=1', 'css/win-cinematic-v1.css?v=4', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=1', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=4', 'manifest.webmanifest',
-  'js/ui/main.js?v=61', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
+  'css/product-ui-v17.css?v=1', 'css/are-report-v1.css?v=4', 'css/stats-v1.css?v=1', 'css/win-cinematic-v1.css?v=4', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=1', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=4', 'css/progression-ui-v83.css?v=1', 'manifest.webmanifest',
+  'js/ui/main.js?v=63', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=1', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=4', 'js/ui/gameplay-controls.js?v=12',
   'js/vendor/three/three.module.js', 'js/vendor/three/three.core.js',
   'js/vendor/three/addons/geometries/RoundedBoxGeometry.js',
   'js/ui/win-presentation.js?v=3',
@@ -28,7 +28,7 @@ const ASSETS = [
   'js/engine/score.js', 'js/engine/placement.js',
   'js/engine/opening-dealer.js', 'js/engine/opening-dealer.js?v=17',
   'js/engine/game.js?v=18', 'js/engine/ai.js?v=18',
-  'js/engine/decision-contract.js', 'js/engine/decision-log.js', 'js/engine/com-characters.js?v=1', 'js/engine/progression.js?v=1',
+  'js/engine/decision-contract.js', 'js/engine/decision-log.js', 'js/engine/com-characters.js?v=2', 'js/engine/progression.js?v=1',
   'js/engine/legal-actions.js', 'js/engine/decision-boundary.js',
   'js/engine/decision-evaluator.js?v=18', 'js/engine/win-uncertainty.js',
   'js/engine/session-snapshot.js', 'js/engine/decision-coach.js?v=5',
@@ -37,6 +37,12 @@ const ASSETS = [
   'assets/gptimage_v1/hanzou_portrait_v1.png',
   'assets/gptimage_v1/joe_portrait_v1.png',
   'assets/gptimage_v1/himeko_portrait_v1.png',
+  'assets/gptimage_v9/mamoru_portrait_v2.png',
+  'assets/gptimage_v9/seitaro_portrait_v1.png',
+  'assets/gptimage_v9/gouda_portrait_v2.png',
+  'assets/gptimage_v9/daisuke_portrait_v1.png',
+  'assets/gptimage_v9/chen_portrait_v1.png',
+  'assets/gptimage_v9/sawaka_portrait_v2.png',
   'assets/gptimage_v2/mahjong_tile_master_cropped_v1.png',
   'assets/gptimage_v3/center_device_v1.png',
   'assets/gptimage_v4/oblique_blue_table_base_v1.webp',

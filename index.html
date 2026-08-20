@@ -10,7 +10,7 @@
 <title>純麻雀</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/style.css?v=12">
+<link rel="stylesheet" href="css/style.css?v=13">
 <link rel="stylesheet" href="css/table-v9.css?v=16">
 <link rel="stylesheet" href="css/tokens-v15.css?v=15">
 <link rel="stylesheet" href="css/learning-modes-v15.css?v=17">
@@ -28,6 +28,7 @@
 <link rel="stylesheet" href="css/tile-cuboid-v2.css?v=1">
 <link rel="stylesheet" href="css/tabletop-projection-v1.css?v=1">
 <link rel="stylesheet" href="css/webgl-tabletop-v1.css?v=4">
+<link rel="stylesheet" href="css/progression-ui-v83.css?v=1">
 </head>
 <body>
 <div id="app">
@@ -51,7 +52,7 @@
       </header>
       <div class="title-progression" id="title-progression" aria-label="レベルと経験値">
         <span id="title-level" class="title-level"></span>
-        <div class="level-bar" aria-hidden="true"><i id="title-level-fill"></i></div>
+        <div class="level-bar" role="progressbar" aria-label="次のレベルまでの進捗" aria-valuemin="0" aria-valuemax="100"><i id="title-level-fill"></i></div>
         <span id="title-exp" class="title-exp"></span>
       </div>
       <div class="opponent-line title-rivals" id="title-rivals" aria-label="対局相手">
@@ -314,7 +315,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=61"></script>
+<script type="module" src="js/ui/main.js?v=63"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>
