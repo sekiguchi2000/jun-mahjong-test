@@ -191,15 +191,41 @@ function passedKindsForThreat(view, threatPlayer) {
 }
 
 function threatData(threats) {
-  return threats.map(threat => ({
-    seat: threat.i,
-    kinds: new Set([
-      ...(threat.pl.discards ?? []).map(discard => discard.tile.kind),
-      ...(threat.passedKinds ?? []),
-    ]),
-    declarationKind: (threat.pl.discards ?? []).find(discard => discard.riichi)?.tile?.kind ?? null,
-    player: threat.pl,
-  }));
+  return threats.map(threat => {
+    const discards = threat.pl.discards ?? [];
+    const riichiIndex = discards.findIndex(discard => discard.riichi);
+    // リーチ直前の手出し数牌: その周辺(またぎスジ)は手の内側だった気配が濃い
+    let lastTedashiKind = null;
+    if (riichiIndex > 0) {
+      for (let index = riichiIndex - 1; index >= 0; index--) {
+        const discard = discards[index];
+        if (!discard.tsumogiri && Number.isInteger(discard.tile?.kind) && discard.tile.kind < 27) {
+          lastTedashiKind = discard.tile.kind;
+          break;
+        }
+      }
+    }
+    return {
+      seat: threat.i,
+      kinds: new Set([
+        ...discards.map(discard => discard.tile.kind),
+        ...(threat.passedKinds ?? []),
+      ]),
+      declarationKind: discards.find(discard => discard.riichi)?.tile?.kind ?? null,
+      lastTedashiKind,
+      riichiTurn: riichiIndex >= 0 ? riichiIndex + 1 : null,
+      player: threat.pl,
+    };
+  });
+}
+
+// またぎスジ: 手出し牌tを含む両面が待つ牌 {t-2, t-1, t+1, t+2}(同色内)
+function isMatagiSuji(kind, tedashiKind) {
+  if (tedashiKind === null || tedashiKind === undefined) return false;
+  if (kind >= 27 || tedashiKind >= 27) return false;
+  if (Math.floor(kind / 9) !== Math.floor(tedashiKind / 9)) return false;
+  const gap = Math.abs(kind - tedashiKind);
+  return gap === 1 || gap === 2;
 }
 
 // リーチ宣言牌の裏筋(宣言牌±1・±4の数牌)。手なりで進めた宣言牌の周辺は
@@ -346,21 +372,32 @@ function assessAgainstThreat(kind, threat, visible) {
     ryanmenRoutes.every(route => route.eliminatedByNoChance);
   const noChanceRoutes = sequenceRoutes.filter(route => route.eliminatedByNoChance).length;
   const routeRisk = sequenceRoutes.reduce((sum, route) => sum + routeWeight(route), 0);
+  // 待ち種別の巡目補正(v91): 早いリーチは両面が主でシャンポン・単騎は薄い。
+  // 遅いリーチは形が崩れた末の宣言が増え、シャンポン・単騎(特に字牌)の比重が上がる
+  const residualScale = threat.riichiTurn === null ? 1
+    : threat.riichiTurn <= 5 ? 0.75
+    : threat.riichiTurn >= 11 ? 1.4
+    : 1;
   const residualRisk = residualWaits.reduce((sum, wait) =>
-    sum + (wait === 'SHANPON' ? 4 : (wait === 'TANKI' ? 2 : 1)), 0);
+    sum + (wait === 'SHANPON' ? 4 : (wait === 'TANKI' ? 2 : 1)), 0) * residualScale;
   const urasujiOfDeclaration = isDeclarationUrasuji(kind, threat.declarationKind ?? null);
   // スジ引っかけの型: スジで両面が消えている牌ほど、残った嵌張が「狙いの待ち」である
   // 危険を上乗せする(内隣の早手出しが証拠のときだけ)
   const sujiTrap = sujiEliminated > 0 && sujiTrapSignal(kind, threat);
+  // またぎスジ(v91): リーチ直前に手出しされた数牌の周辺は、直前まで手の内側だった気配
+  const matagiSuji = aliveRoutes.length > 0 && isMatagiSuji(kind, threat.lastTedashiKind ?? null);
   // 当たり形が1つでも残るなら床1(モデル誤差を安全側へ)。0形は牌の枚数と
   // フリテン規則から成立し得ないので、現物と同じ0(完全安牌)。
   const risk = noChance ? 0
-    : Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0) + (sujiTrap ? 8 : 0));
+    : Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0) + (sujiTrap ? 8 : 0) +
+        (matagiSuji ? 2 : 0));
   return {
     seat: threat.seat,
     genbutsu: false,
     risk,
     urasujiOfDeclaration,
+    matagiSuji,
+    lastTedashiKind: threat.lastTedashiKind ?? null,
     category: sequenceRoutes.some(route => route.possible)
       ? 'NON_GENBUTSU_WAIT_ROUTE'
       : 'NON_GENBUTSU_RESIDUAL_ONLY',
@@ -1194,9 +1231,33 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
     // 読みの層 (2026-08-22ユーザー設計): 相手の打点を証拠から推定し、
     // 順位の傷の深さ・自手の見返りまで含めて押し引きの強さを決める
     const read = readThreats(view);
+    // テンパイ時は待ちの実live枚数を数える(v91: 定数近似からの置き換え)。
+    // 最良の打牌を選んだときの待ちで評価する
+    let liveWaitsEstimate = 5;
+    if (currentShanten === 0) {
+      const visibleForProspect = visibleCounts(view);
+      const counts14 = toCounts(handAll);
+      let bestLive = 0;
+      for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
+        if (counts14[discardKind] === 0) continue;
+        counts14[discardKind]--;
+        if (shanten(counts14, meldCount) === 0) {
+          let live = 0;
+          for (let waitKind = 0; waitKind < KIND_COUNT; waitKind++) {
+            if (counts14[waitKind] >= 4) continue;
+            counts14[waitKind]++;
+            if (shanten(counts14, meldCount) === -1) live += remainingCopies(visibleForProspect, waitKind);
+            counts14[waitKind]--;
+          }
+          bestLive = Math.max(bestLive, live);
+        }
+        counts14[discardKind]++;
+      }
+      liveWaitsEstimate = bestLive;
+    }
     const prospect = handProspect({
       shanten: currentShanten,
-      liveWaits: 5,
+      liveWaits: liveWaitsEstimate,
       remaining: view.public?.remaining,
       valueTiles: ownValueTiles,
       menzen: meldCount === 0,

@@ -395,6 +395,12 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
   // 対子未満の役牌は、基本線では後追いしない。例外だけ引き上げる。
   if (isHonor(kind) && counts[kind] === 1) {
     let loneValue = isValueHonorKind(kind, context) ? 0.15 : 0.05;
+    // 終盤の安全牌キープ(カルテ39号): 13巡目以降はリーチがいつ来てもおかしくない。
+    // 浮いた字牌は「いつでも通せる1枚」として、浮き数牌より価値が逆転する
+    if (context.phase === 'late') {
+      loneValue = Math.max(loneValue, 0.6);
+      notes.add('SAFETY_STOCK_KEEP');
+    }
     if (isDoubleWindKind(kind, context)) {
       // ダブ風は1枚でも「しばらく持つ」(ユーザー指定)。浮き数牌の残留価値より高くする
       loneValue = Math.max(loneValue, 1.1);

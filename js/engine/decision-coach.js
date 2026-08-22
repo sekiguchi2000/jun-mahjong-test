@@ -229,6 +229,9 @@ function safetyReasonSentences(view, metrics, selectedTile) {
     if (detail.urasujiOfDeclaration) {
       reasons.push('ただし宣言牌の裏筋にあたるので、警戒は少し残します');
     }
+    if (detail.matagiSuji && Number.isInteger(detail.lastTedashiKind)) {
+      reasons.push(`ただしリーチ直前に手出しされた${tileName(detail.lastTedashiKind)}のまたぎスジにあたるので、警戒は少し残します`);
+    }
     if (reasons.length > 0) {
       sentences.push(`${name}は、${reasons.join('。また、')}。`);
     } else if (detail.risk > 0) {
@@ -772,6 +775,9 @@ function keptHonorReason(view, selected, action) {
   if (plans.some(plan => plan.code === 'CHANTA' && (plan.weight ?? 0) * (plan.value ?? 0) >= 0.25)) {
     return { type: 'chanta' };
   }
+  // 終盤(13巡目〜)は浮き字牌を安全牌ストックとして残す(カルテ39号)
+  const turnNumber = (view?.public?.players?.[view?.me ?? 0]?.discards?.length ?? 0) + 1;
+  if (turnNumber >= 13) return { type: 'safetyStock' };
   return null;
 }
 
@@ -783,6 +789,7 @@ function keptHonorHeadline(reason) {
     case 'doubleWind': return `ダブ${tileName(reason.kind)}を残し、数牌から整理する`;
     case 'honitsu': return 'ホンイツ含みで字牌を残し、他の色から整理する';
     case 'chanta': return 'チャンタ・字牌の重なりを見て、真ん中の牌から整理する';
+    case 'safetyStock': return '終盤へ備え、いつでも通せる字牌を残す';
     default: return null;
   }
 }
@@ -851,6 +858,8 @@ function turnExplanationParts(view, analysis) {
         sentences.push('字牌はホンイツの材料として残し、まず他の色の中張牌から整理します。');
       } else if (keepReason?.type === 'chanta') {
         sentences.push('手がバラバラなので、チャンタや字牌の重なりに寄せる前提で、真ん中の数牌から先に整理します。');
+      } else if (keepReason?.type === 'safetyStock') {
+        sentences.push('浮いた字牌は終盤の安全牌ストックとして手に残します。誰かのリーチが来たとき、いつでも通せる1枚が逃げ道になります。');
       }
     }
     if (factors.has('LEAD_PROTECT_FOLD')) {
