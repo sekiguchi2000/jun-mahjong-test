@@ -275,6 +275,26 @@ function routeWeight(route) {
   return route.oneChance ? 2 : 4;
 }
 
+// スジ引っかけの型 (2026-08-22 ユーザー読み): 例) 1p3p3p5pから3pを手出しで外し、
+// リャンカンを1-3p嵌張に固定して5p切りリーチ = 2pがスジに見えて当たる。
+// 「宣言牌のスジ」を根拠に安全視する牌について、宣言者が対象牌の内隣
+// (対象牌と宣言牌の間の牌)をリーチ前に手出ししていたら、この型の危険を上乗せする。
+function sujiTrapSignal(kind, threat) {
+  const declarationKind = threat.declarationKind;
+  if (declarationKind === null || declarationKind === undefined) return false;
+  if (kind >= 27 || declarationKind >= 27) return false;
+  if (Math.floor(kind / 9) !== Math.floor(declarationKind / 9)) return false;
+  const diff = declarationKind - kind;
+  if (Math.abs(diff) !== 3) return false;
+  const middleKind = kind + (diff > 0 ? 1 : -1);
+  const discards = threat.player?.discards ?? [];
+  const riichiIndex = discards.findIndex(discard => discard.riichi);
+  return discards.some((discard, index) =>
+    !discard.tsumogiri &&
+    (riichiIndex < 0 || index < riichiIndex) &&
+    discard.tile?.kind === middleKind);
+}
+
 function assessAgainstThreat(kind, threat, visible) {
   const genbutsu = threat.kinds.has(kind);
   if (genbutsu) {
@@ -329,10 +349,13 @@ function assessAgainstThreat(kind, threat, visible) {
   const residualRisk = residualWaits.reduce((sum, wait) =>
     sum + (wait === 'SHANPON' ? 4 : (wait === 'TANKI' ? 2 : 1)), 0);
   const urasujiOfDeclaration = isDeclarationUrasuji(kind, threat.declarationKind ?? null);
+  // スジ引っかけの型: スジで両面が消えている牌ほど、残った嵌張が「狙いの待ち」である
+  // 危険を上乗せする(内隣の早手出しが証拠のときだけ)
+  const sujiTrap = sujiEliminated > 0 && sujiTrapSignal(kind, threat);
   // 当たり形が1つでも残るなら床1(モデル誤差を安全側へ)。0形は牌の枚数と
   // フリテン規則から成立し得ないので、現物と同じ0(完全安牌)。
   const risk = noChance ? 0
-    : Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0));
+    : Math.max(1, routeRisk + residualRisk + (urasujiOfDeclaration ? 3 : 0) + (sujiTrap ? 8 : 0));
   return {
     seat: threat.seat,
     genbutsu: false,
@@ -343,6 +366,7 @@ function assessAgainstThreat(kind, threat, visible) {
       : 'NON_GENBUTSU_RESIDUAL_ONLY',
     suji: sujiEliminated > 0,
     sujiEliminated,
+    sujiTrap,
     oneChance,
     oneChanceShape,
     oneChanceRoutes,
@@ -636,6 +660,7 @@ function discardCandidate({
   // 赤切りペナルティ: 2向聴以上の浮き牌整理では赤を最後まで残す(受け入れ差より
   // 確定1翻を優先=2026-08-19実戦カルテ17号)。テンパイ・1向聴は待ちの質を優先
   const utilityAdjustments = { redDiscardPenalty: tile.red ? (afterShanten >= 2 ? -4 : -0.5) : 0 };
+  const metricsExtras = {};
   if (doraMultiplicity > 0) {
     // ドラ対子(2枚以上)は手の打点の柱。1枚目を割る判断は1翻分では済まないため
     // ペナルティを厚くする(2026-08-22ペルソナ検品: 攻め思考がドラ対子の西を割った)。
@@ -706,6 +731,33 @@ function discardCandidate({
       const stylePlanWeight = style.planWeight ?? 1;
       utilityAdjustments.planRetention =
         -(PLAN_SCALE * deepShantenBoost * planEvaluation.retention * tenpaiAttenuation * valueBias * stylePlanWeight);
+    }
+  }
+  // 将来フリテンの割引 (2026-08-22 ユーザー読み・実戦カルテ37号):
+  // 残す搭子の待ちが自分の河に既にあると、その搭子で完成した待ちはフリテンで
+  // ロンできない(例: 1pを切った後の2p3p両面 → 1p-4p待ちが丸ごとロン不可)。
+  // 受け入れ枚数上は同じ「広さ」でも価値が大きく目減りするため、割り引く。
+  if (calculateUkeire) {
+    const myDiscardKinds = new Set(
+      (view.public?.players?.[view.me]?.discards ?? []).map(discard => discard.tile.kind));
+    if (myDiscardKinds.size > 0) {
+      const keptTiles = handAll.filter((_, tileIndex) => tileIndex !== index);
+      const { chosen } = decomposeBlocks(keptTiles, context.planContext);
+      let furitenPenalty = 0;
+      const furitenShapes = [];
+      for (const block of chosen) {
+        const waits = taatsuWaitKinds(block);
+        if (waits.length === 0) continue;
+        if (waits.some(waitKind => myDiscardKinds.has(waitKind))) {
+          // 両面級ほど「広さの毒」が大きい。強度は赤温存(カルテ11号)を覆さない範囲に校正
+          furitenPenalty += waits.length >= 2 ? 2.2 : 1.5;
+          furitenShapes.push({ type: block.type, kinds: [...block.kinds], waits });
+        }
+      }
+      if (furitenPenalty > 0) {
+        utilityAdjustments.furitenShapePenalty = -furitenPenalty;
+        metricsExtras.furitenShapes = furitenShapes;
+      }
     }
   }
   // 陳: カンチャン・ペンチャン落としは内側の牌から(同点時のみ効く微小差)
@@ -862,6 +914,7 @@ function discardCandidate({
       safety,
       ...(planEvaluation ? { planEvaluation } : {}),
       ...(pressureCaution ? { pressureCaution } : {}),
+      ...metricsExtras,
     },
     reasons: planEvaluation && planEvaluation.retention > 0
       ? ['SHANTEN_UKEIRE', 'PLAN_RETENTION']
@@ -871,6 +924,20 @@ function discardCandidate({
 
 function isValueHonor(kind, view) {
   return isHonor(kind) && (isDragon(kind) || kind === view?.seatWind || kind === view?.roundWind);
+}
+
+// 搭子が完成したときに待つ牌(将来フリテン判定用)。順子系の搭子だけを対象にする。
+// chosen側はtypeが'taatsu'へ正規化されるため、kindsの並びから形を導出する
+function taatsuWaitKinds(block) {
+  const kinds = block?.kinds ?? [];
+  if (kinds.length < 2 || kinds.length > 3 || kinds[0] >= 27) return [];
+  const suitBase = Math.floor(kinds[0] / 9) * 9;
+  const within = kind => kind >= suitBase && kind < suitBase + 9;
+  if (kinds.length === 3) return [kinds[0] + 1, kinds[1] + 1]; // リャンカン
+  const [low, high] = kinds;
+  if (high - low === 1) return [low - 1, high + 1].filter(within); // 両面・辺張
+  if (high - low === 2) return [low + 1];                          // 嵌張
+  return []; // 対子など
 }
 
 // 牌効率が完全に同じときだけ、単独の役にならない字牌を先に処理する。

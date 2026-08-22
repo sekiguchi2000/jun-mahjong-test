@@ -194,7 +194,12 @@ function safetyReasonSentences(view, metrics, selectedTile) {
       if (sujiSides.length > 0 && wallSides.length > 0) {
         reasons.push(`${sujiEvidence}が通っているスジと、${wallEvidence}が4枚見えている壁で、両面待ちはどちら側も消えています`);
       } else if (sujiSides.length > 0 && wallSides.length === 0 && ryanmenRoutes.every(route => route.eliminatedBySuji)) {
-        reasons.push(`${sujiEvidence}が通っているスジなので、両面待ちには当たりません`);
+        // スジ引っかけの証拠(内隣の早手出し)があるときは過信を戒める(カルテ37号)
+        if (detail.sujiTrap) {
+          reasons.push(`${sujiEvidence}が通っているスジで両面には当たりませんが、相手は${tileName(selectedTile.kind - 1)}${tileName(selectedTile.kind + 1)}の嵌張を残してスジで待つ「引っかけ」の型を河が示唆しています(内側の牌を途中で手出し)。スジを過信できない牌です`);
+        } else {
+          reasons.push(`${sujiEvidence}が通っているスジなので、両面待ちには当たりません`);
+        }
       }
       // 全側が壁のケースは下の壁文+「両面待ちに対しては、ノーチャンスです」が担当
     }
@@ -615,6 +620,7 @@ function comparisonParts(view, analysis) {
   const plainHonorEquals = [];
   const honorNarrowerNames = [];
   let honorNarrowerDelta = null;
+  let furitenClauseSaid = false;
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
     const name = tileName(tile.kind, tile.red);
@@ -690,6 +696,23 @@ function comparisonParts(view, analysis) {
     }
     // 広さで負けているのに選んだケース: 効用差の最大要因を名指しする(カルテ28号)
     if (delta < 0) {
+      // 将来フリテン(カルテ37号): 広い案の中身が「ロンできない待ち」なら、それを名指しする
+      const altFuritenPenalty = metrics.utilityAdjustments?.furitenShapePenalty ?? 0;
+      const selectedFuritenPenalty = selectedMetrics.utilityAdjustments?.furitenShapePenalty ?? 0;
+      const altFuritenShapes = candidate.metrics?.furitenShapes ?? [];
+      if (altFuritenPenalty < selectedFuritenPenalty - 0.1 && altFuritenShapes.length > 0) {
+        if (furitenClauseSaid) {
+          parts.push(`${name}切りも同様に、フリテンの形が残るため見送ります。`);
+          continue;
+        }
+        furitenClauseSaid = true;
+        const shape = altFuritenShapes[0];
+        const myRiverKinds = new Set((view?.public?.players?.[view?.me ?? 0]?.discards ?? [])
+          .map(discard => discard.tile.kind));
+        const riverWait = shape.waits.find(waitKind => myRiverKinds.has(waitKind));
+        parts.push(`${name}を切る案の方が受け入れは${-delta}枚広いですが、その場合に残る${shape.kinds.map(kind => tileName(kind)).join('')}の形は、あなたが${riverWait !== undefined ? tileName(riverWait) : '待ち牌'}を既に切っているため完成してもフリテン（ロンあがりできない待ち）です。広さの中身が目減りするので、${selectedName}を選びます。`);
+        continue;
+      }
       const reason = dominantKeepReason(candidate, selected, name);
       parts.push(reason
         ? `${name}を切る案の方が受け入れは${-delta}枚広いですが、${reason}、${selectedName}を先に切ります。`
@@ -903,6 +926,14 @@ function turnExplanationParts(view, analysis) {
         const pressureReason = pressureSafetySentence(view, metrics, selectedTileForSafety);
         if (pressureReason) sentences.push(pressureReason);
       }
+    }
+    // 将来フリテンの正直な開示(カルテ37号): 選んだ打牌が残す形がフリテン予備軍なら言う
+    if ((selected?.metrics?.furitenShapes?.length ?? 0) > 0) {
+      const shape = selected.metrics.furitenShapes[0];
+      const myRiverKinds = new Set((view?.public?.players?.[view?.me ?? 0]?.discards ?? [])
+        .map(discard => discard.tile.kind));
+      const riverWait = shape.waits.find(waitKind => myRiverKinds.has(waitKind));
+      sentences.push(`残す${shape.kinds.map(kind => tileName(kind)).join('')}の形は、あなたが${riverWait !== undefined ? tileName(riverWait) : '待ち牌'}を切っているため完成するとフリテンです。ロンはできず、あがりはツモ限定になります。`);
     }
     // 次の一手問題の解説調(2026-08-19指定): テンパイ間近だけ短く言い、
     // 枚数の列挙(引いて嬉しい牌・受け入れ合計)や局面の定型おさらいは書かない
