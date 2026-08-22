@@ -609,6 +609,8 @@ function comparisonParts(view, analysis) {
   const slowerNames = [];
   const valueHonorEquals = [];
   const plainHonorEquals = [];
+  const honorNarrowerNames = [];
+  let honorNarrowerDelta = null;
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
     const name = tileName(tile.kind, tile.red);
@@ -627,12 +629,24 @@ function comparisonParts(view, analysis) {
         parts.push(`${name}はドラの字牌です。切ると1翻ぶん打点を失うため残します（安全を最優先するときだけ手放す選択があります）。`);
         continue;
       }
+      // ダブ風は「1翻の芽」ではなく2翻+ポン材。一般の役牌と同じ文で過小評価しない
+      if (tile.kind === view?.seatWind && tile.kind === view?.roundWind) {
+        parts.push(`${name}はダブ風（場風かつ自風）です。重なれば一つの対子で2翻、ポンで速度も出るため、同じ広さなら残します。`);
+        continue;
+      }
       // 同格の字牌が複数あるときは1文にまとめる(東・發・中を3回繰り返さない)
       if (valueHonor(tile, view)) {
         valueHonorEquals.push(name);
       } else {
         plainHonorEquals.push(name);
       }
+      continue;
+    }
+    // 序盤に字牌を残して数牌を切るのが「受け入れの広さ」由来のときは、理由を明示する
+    // (2026-08-22ユーザー裁定: 数牌先切りが強い場合はその根拠をガイドに書く)
+    if (isHonor(tile.kind) && delta > 2) {
+      honorNarrowerNames.push(name);
+      if (honorNarrowerDelta === null || delta < honorNarrowerDelta) honorNarrowerDelta = delta;
       continue;
     }
     // 受け入れが狭いだけの案は列挙しない(受け入れの中身は本文で説明済み)
@@ -689,6 +703,9 @@ function comparisonParts(view, analysis) {
   } else if (plainHonorEquals.length >= 2) {
     parts.push(`${plainHonorEquals.join('・')}はいずれも役にならない字牌で、${selectedName}切りとの差はほぼありません。これらから切る選択もありです。`);
   }
+  if (honorNarrowerNames.length > 0) {
+    parts.push(`セオリーどおり${honorNarrowerNames.join('・')}を先に片付ける手もあります。ただ今切ると受け入れが${honorNarrowerDelta}枚狭くなるため、ここでは手の広さを優先して${selectedName}を選びました。字牌は次の巡目以降で整理できます。`);
+  }
   if (slowerNames.length === 1) {
     parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);
   } else if (slowerNames.length >= 2 && slowerNames.length <= 3) {
@@ -697,6 +714,50 @@ function comparisonParts(view, analysis) {
     parts.push('残りの牌は、切るとテンパイが遠くなるため候補から外しています。');
   }
   return parts;
+}
+
+// 数牌切り推奨で手に字牌が残るとき、その字牌を残す根拠を返す。
+// 優先度: ドラ字牌 > ダブ風 > 染め・チャンタの材料。該当なしはnull(通常の字牌なら既に切っている)。
+function keptHonorReason(view, selected, action) {
+  const discard = tileAt(view, action?.index);
+  if (!discard || isHonor(discard.kind)) return null;
+  const handAll = view?.drawn ? [...view.hand, view.drawn] : [...(view?.hand ?? [])];
+  const counts = {};
+  for (const tile of handAll) counts[tile.kind] = (counts[tile.kind] || 0) + 1;
+  const keptLoneHonors = Object.keys(counts).map(Number)
+    .filter(kind => isHonor(kind) && counts[kind] === 1);
+  if (keptLoneHonors.length === 0) return null;
+  const doraKinds = (view?.public?.doraIndicators ?? []).map(tile => doraFromIndicator(tile.kind));
+  const doraHonor = keptLoneHonors.find(kind => doraKinds.includes(kind));
+  if (doraHonor !== undefined) return { type: 'dora', kind: doraHonor };
+  const doubleWind = keptLoneHonors.find(kind => kind === view?.seatWind && kind === view?.roundWind);
+  if (doubleWind !== undefined) return { type: 'doubleWind', kind: doubleWind };
+  // topPlans(上位2件)では3位以下のCHANTA/HONITSUを取りこぼすため、プラン全体を再計算して見る
+  let plans = [];
+  try {
+    plans = evaluateHandPlans(handAll, view?.melds ?? [], {
+      seatWind: view?.seatWind, roundWind: view?.roundWind, doraKinds,
+    });
+  } catch { /* プラン計算不能なら理由なし扱い */ }
+  if (plans.some(plan => plan.code === 'HONITSU' && (plan.weight ?? 0) * (plan.value ?? 0) >= 0.25)) {
+    return { type: 'honitsu' };
+  }
+  if (plans.some(plan => plan.code === 'CHANTA' && (plan.weight ?? 0) * (plan.value ?? 0) >= 0.25)) {
+    return { type: 'chanta' };
+  }
+  return null;
+}
+
+// 見出し用の短文。パネルで最初に見える行なので「なぜ字牌を残すのか」をここで即答する
+function keptHonorHeadline(reason) {
+  if (!reason) return null;
+  switch (reason.type) {
+    case 'dora': return `ドラの${tileName(reason.kind)}を残し、浮いた数牌から整理する`;
+    case 'doubleWind': return `ダブ${tileName(reason.kind)}を残し、数牌から整理する`;
+    case 'honitsu': return 'ホンイツ含みで字牌を残し、他の色から整理する';
+    case 'chanta': return 'チャンタ・字牌の重なりを見て、真ん中の牌から整理する';
+    default: return null;
+  }
 }
 
 function turnExplanationParts(view, analysis) {
@@ -745,6 +806,16 @@ function turnExplanationParts(view, analysis) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
     } else if (honor && honor.value && honor.copies === 1) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}なので、もう1枚重なれば役になります。ただし、今の手を進めるほうが有利なら、その可能性を手放して切ることもあります。`);
+    }
+    // 数牌を切って字牌を残すとき、残す理由が対案説明に出ない形(ドラ/ダブ風が対案に
+    // 並ばないケース)でも詳細に一言残す。対案側に同じ説明があるときは重複させない。
+    if (!honor) {
+      const keepReason = keptHonorReason(view, selected, action);
+      if (keepReason?.type === 'honitsu') {
+        sentences.push('字牌はホンイツの材料として残し、まず他の色の中張牌から整理します。');
+      } else if (keepReason?.type === 'chanta') {
+        sentences.push('手がバラバラなので、チャンタや字牌の重なりに寄せる前提で、真ん中の数牌から先に整理します。');
+      }
     }
     if (factors.has('MAWASHI_SAFE_ADVANCE')) {
       sentences.push('相手のリーチに対して、無筋を切ってまで最速を追う見返りが小さい形です。通っている牌や危険の低い牌で手を回し、テンパイの芽は残します。');
@@ -802,7 +873,18 @@ function turnExplanationParts(view, analysis) {
     else if (metrics.shanten === 1) sentences.push('テンパイまであと一歩の形です。');
   }
   const comparisons = action?.action === 'discard' ? comparisonParts(view, analysis) : [];
-  const planHead = action?.action === 'discard' ? planHeadlineSentences(selected, view) : [];
+  let planHead = action?.action === 'discard' ? planHeadlineSentences(selected, view) : [];
+  // 字牌をチャンタ/ホンイツ見合いで残す判断のときは、「本線はタンヤオ・ピンフ」と
+  // 矛盾しないよう本線文を両にらみ表現へ差し替える(2026-08-22 実戦検品)
+  if (action?.action === 'discard') {
+    const keepReason = keptHonorReason(view, selected, action);
+    if (keepReason?.type === 'chanta' || keepReason?.type === 'honitsu') {
+      const label = keepReason.type === 'chanta' ? 'チャンタ・字牌の重なり' : 'ホンイツ';
+      planHead = planHead.map(sentence => sentence.startsWith('今の本線は')
+        ? `まだ本線を一本に決めない牌姿です。手なりと${label}の両にらみで進めます。`
+        : sentence);
+    }
+  }
   // 狙い(伸ばす形)→選んだ理由→意味のある同格比較→別プランへの分岐→読み分岐、の順で読ませる
   const growth = action?.action === 'discard' ? blockGrowthSentence(view, action, metrics) : '';
   const alternatives = action?.action === 'discard' ? planAlternativeParts(view, analysis) : [];
@@ -953,10 +1035,18 @@ function shortHeadline(phase, view, analysis, offer = null) {
   if (action?.action === 'discard') {
     const honor = selectedHonorContext(view, action);
     if (honor && !honor.value && honor.copies === 1) return '役にならない字牌を先に切る';
+    if (honor && honor.value && honor.copies === 1) return '重なり待ちの役牌より、手の伸びを取る';
     if (factors.has('FOLD_ON_RIICHI_THREAT') || factors.has('RIICHI_LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_COMMON_GENBUTSU')) {
       return 'リーチ者への危険度を下げる';
     }
     if (factors.has('SUIT_PRESSURE_AVOIDED')) return '相手の色に合わせて危険牌を避ける';
+    {
+      // 数牌切りで字牌が残る判断は、残す根拠(ドラ/ダブ風/染め/チャンタ)を見出しで即答する
+      const selectedCandidate = (analysis?.candidates ?? []).find(candidate =>
+        candidate.candidateId === analysis?.selected?.candidateId);
+      const keepHeadline = keptHonorHeadline(keptHonorReason(view, selectedCandidate, action));
+      if (keepHeadline) return keepHeadline;
+    }
     if (factors.has('KNOWN_VALUE_PRESERVED')) return '見えている価値牌を残す';
     const comparison = comparisonHeadline(view, analysis);
     if (comparison) return comparison;

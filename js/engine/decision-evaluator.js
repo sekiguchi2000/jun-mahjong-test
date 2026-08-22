@@ -33,7 +33,7 @@ export const AI_STYLES = Object.freeze({
   defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8, riichiHoldPolicy: 'cautious' }),
   efficiency: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
-    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never',
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', earlyHonorSweep: false,
   }),
   // スピリチュアル(遊び枠): 挙動はバランス相当+対子場チートイ固定+南場のツキ吸い取り鳴き。
   // ツキ状態(あがり/放銃後)はUI側がspiritualHotへ切り替える
@@ -48,7 +48,7 @@ export const AI_STYLES = Object.freeze({
   // COMキャラ用 (2026-08-20): ダイスケ=脇目もふらぬ最速+必ずカン
   daisuke: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
-    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', kanEager: true,
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', kanEager: true, earlyHonorSweep: false,
   }),
   // 陳=絶対リーチしないダマ職人。テンパイからでも降りる。内側から捨てる癖
   chen: Object.freeze({
@@ -702,6 +702,21 @@ function discardCandidate({
   // 陳: カンチャン・ペンチャン落としは内側の牌から(同点時のみ効く微小差)
   if (style.innerFirstDrop && !isHonor(tile.kind)) {
     utilityAdjustments.innerFirstBias = 0.005 * (4 - Math.abs(numOf(tile.kind) - 5));
+  }
+  // 序盤の字牌整理 (カルテ34号・2026-08-22ユーザー裁定): 人間の標準は「序盤は字牌から」。
+  // 受け入れ1〜2枚差では孤立字牌キープを許さない。残す根拠が立つ字牌(ドラ/ダブ風/
+  // 染め・チャンタ・国士・三元の材料)は対象外。効率思考とダイスケは純受け入れ主義なので付けない。
+  if (style.earlyHonorSweep !== false && isHonor(tile.kind) &&
+      context.planContext?.phase === 'early' && !view.riichi) {
+    const copies = handAll.filter(item => item.kind === tile.kind).length;
+    const isDoraHonor = context.doraKinds?.includes(tile.kind) === true;
+    const isDoubleWind = tile.kind === view.seatWind && tile.kind === view.roundWind;
+    const mixedPlanKeep = (context.plans ?? []).some(plan =>
+      ['HONITSU', 'CHANTA', 'KOKUSHI', 'SANGEN'].includes(plan.code) &&
+      (plan.weight ?? 0) * (plan.value ?? 0) >= 0.25);
+    if (copies === 1 && !isDoraHonor && !isDoubleWind && !mixedPlanKeep) {
+      utilityAdjustments.earlyHonorSweep = isValueHonor(tile.kind, view) ? 0.55 : 1.5;
+    }
   }
   const utilityAdjustment = Object.values(utilityAdjustments)
     .reduce((sum, adjustment) => sum + adjustment, 0);

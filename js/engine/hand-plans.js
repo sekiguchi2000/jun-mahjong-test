@@ -381,6 +381,16 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
     if (completeSet || blockQuality >= 0.9) notes.add('BLOCK_CORE');
   }
 
+  // --- 孤立数牌の内在価値 (カルテ34号) ---
+  // 浮き数牌はターツ化・タンヤオ/ピンフの種として孤立字牌より価値が高い(5>46>37>28>19)。
+  // これが無いと浮き7mの残留価値0が孤立役牌0.15に負け、「字牌を残して数牌から切る」
+  // 不自然な序盤打牌になる(実戦検品2026-08-22)。ブロック構成牌には適用しない(骨は別枠)。
+  if (!isHonor(kind) && counts[kind] === 1 && blockQuality === 0) {
+    const centrality = 4 - Math.abs(numOf(kind) - 5);          // 5=4, 46=3, 37=2, 28=1, 19=0
+    const isolatedValue = [0.1, 0.25, 0.35, 0.45, 0.5][centrality];
+    retention = Math.max(retention, isolatedValue);
+  }
+
   // --- 孤立役牌の見切り(カルテ2号) ---
   // 対子未満の役牌は、基本線では後追いしない。例外だけ引き上げる。
   if (isHonor(kind) && counts[kind] === 1) {
