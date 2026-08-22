@@ -635,7 +635,15 @@ function discardCandidate({
   // 赤切りペナルティ: 2向聴以上の浮き牌整理では赤を最後まで残す(受け入れ差より
   // 確定1翻を優先=2026-08-19実戦カルテ17号)。テンパイ・1向聴は待ちの質を優先
   const utilityAdjustments = { redDiscardPenalty: tile.red ? (afterShanten >= 2 ? -4 : -0.5) : 0 };
-  if (doraMultiplicity > 0) utilityAdjustments.doraDiscardPenalty = -0.75 * doraMultiplicity;
+  if (doraMultiplicity > 0) {
+    // ドラ対子(2枚以上)は手の打点の柱。1枚目を割る判断は1翻分では済まないため
+    // ペナルティを厚くする(2026-08-22ペルソナ検品: 攻め思考がドラ対子の西を割った)。
+    // planWeightの高い思考(攻め)ほど打点の柱を守る。
+    const doraCopies = handAll.filter(item =>
+      context.doraKinds?.includes(item.kind) && item.kind === tile.kind).length;
+    const pairGuard = doraCopies >= 2 ? 2.5 : 0.75;
+    utilityAdjustments.doraDiscardPenalty = -pairGuard * doraMultiplicity * (style.planWeight ?? 1);
+  }
   if (pressure.penalty !== 0 && !style.ignoreRisk) utilityAdjustments.suitPressurePenalty = pressure.penalty;
   // 回し打ち (AI_DESIGN_V12 v12.4): リーチ相手がいて撤退条件未満(=押しモード)でも、
   // 危険度を効用に算入する。テンパイに近いほど押し、遠いほど安全牌で回す。
@@ -1277,7 +1285,21 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   // 降りの閾値を1段早める(analystは1向聴から降り)。テンパイからは降ろさない
   const highContrast = context.threatValue &&
     context.threatValue.threatScale >= 1.3 && context.threatValue.cheapScale >= 1.15;
-  const effectiveFoldAt = highContrast ? Math.min(style.foldAt, Math.max(1, style.foldAt - 1)) : style.foldAt;
+  let effectiveFoldAt = highContrast ? Math.min(style.foldAt, Math.max(1, style.foldAt - 1)) : style.foldAt;
+  // リード保護のベタ降り (2026-08-22ペルソナ検品): 大差リード×安手×(複数リーチ or 終盤)は
+  // テンパイでも降りる。攻め思考でも「既に1位ならその1位を守る」のが1位狙い。
+  // 効率・ダイスケ(ignoreRisk)は思想どおり押し続ける。
+  const myPoints = view.public?.points?.[view.me] ?? 0;
+  const bestOtherPoints = Math.max(...(view.public?.points ?? []).filter((_, seat) => seat !== view.me), 0);
+  // 「間に合わない手」= 残りわずかで1向聴以上。打点があっても和了はほぼ無理なので価値を問わない
+  const hopelessLate = (view.public?.remaining ?? 70) <= 8 && currentShanten >= 1;
+  const leadProtectFold = Number.isFinite(style.foldAt) && !style.ignoreRisk &&
+    threats.length > 0 &&
+    myPoints - bestOtherPoints >= 10000 &&
+    (hopelessLate ||
+      ((context.threatValue?.ownValueTiles ?? 2) <= 1 &&
+        (threats.length >= 2 || (view.public?.remaining ?? 70) <= 12)));
+  if (leadProtectFold) effectiveFoldAt = 0;
   if (threats.length > 0 && currentShanten >= effectiveFoldAt && !view.riichi) {
     const safeChoice = pickSafeTileDetailed(handAll, threats, view, discardCandidates);
     if (safeChoice.index >= 0) {
@@ -1302,6 +1324,14 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
         commonGenbutsu: safeChoice.assessment.commonGenbutsu,
         maxRisk: safeChoice.assessment.maxRisk,
       }];
+      if (leadProtectFold) {
+        decisiveFactors.push({
+          code: 'LEAD_PROTECT_FOLD',
+          lead: myPoints - bestOtherPoints,
+          threatCount: threats.length,
+          remaining: view.public?.remaining ?? null,
+        });
+      }
     }
   }
 

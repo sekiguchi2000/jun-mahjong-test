@@ -593,6 +593,9 @@ function comparisonParts(view, analysis) {
     if (candidate === selected || candidate?.action?.action !== 'discard') continue;
     const tile = candidateTile(view, candidate);
     if (!tile || alternativesByTile.has(`${tile.kind}:${tile.red ? 1 : 0}`)) continue;
+    // 選んだ牌と同種の対案は載せない(対子の片割れを切るとき「この牌は残します」と
+    // 矛盾した説明が出るのを防ぐ。2026-08-22ペルソナ検品: ドラ対子の西)
+    if (tile.kind === selectedTile.kind && Boolean(tile.red) === Boolean(selectedTile.red)) continue;
     alternativesByTile.set(`${tile.kind}:${tile.red ? 1 : 0}`, { candidate, tile });
   }
   const alternatives = [...alternativesByTile.values()]
@@ -817,8 +820,25 @@ function turnExplanationParts(view, analysis) {
         sentences.push('手がバラバラなので、チャンタや字牌の重なりに寄せる前提で、真ん中の数牌から先に整理します。');
       }
     }
-    if (factors.has('MAWASHI_SAFE_ADVANCE')) {
-      sentences.push('相手のリーチに対して、無筋を切ってまで最速を追う見返りが小さい形です。通っている牌や危険の低い牌で手を回し、テンパイの芽は残します。');
+    if (factors.has('LEAD_PROTECT_FOLD')) {
+      const leadFact = (analysis?.decisiveFactors ?? []).find(factor => factor.code === 'LEAD_PROTECT_FOLD');
+      const styleVoice = analysis?.profile === 'attack'
+        ? '攻め思考でも、既に持っている1位はそのまま勝ち切るのが1位狙いです。'
+        : analysis?.profile === 'defense'
+          ? '守り思考の真骨頂です。'
+          : '';
+      sentences.push(`${Math.round((leadFact?.lead ?? 0) / 100) * 100}点の大きなリードがあり、この安い手で押しても得るものがありません。${styleVoice}テンパイを捨ててでも安全第一で、この局は流しにいきます。`);
+    } else if (factors.has('MAWASHI_SAFE_ADVANCE')) {
+      // 選んだ牌に安全根拠が無いのに「通っている牌で回す」と言わない(2026-08-22ペルソナ検品)
+      const mawashiTile = tileAt(view, action.index);
+      const hasSafetyEvidence = safetyReasonSentences(view, metrics, mawashiTile).length > 0 ||
+        (metrics.safety?.maxRisk ?? 1) === 0;
+      const attackVoice = analysis?.profile === 'attack' ? '攻め思考でも、この手は押す見返りが足りません。' : '';
+      if (hasSafetyEvidence) {
+        sentences.push(`${attackVoice}相手のリーチに対して、無筋を切ってまで最速を追う見返りが小さい形です。通っている牌や危険の低い牌で手を回し、テンパイの芽は残します。`);
+      } else {
+        sentences.push(`${attackVoice}相手のリーチに対して完全に通る牌がない手です。最速は追わず、持っている中では危険度が低めの牌で回して、テンパイの芽は残します。`);
+      }
     } else if (factors.has('EARLY_EFFICIENCY_PRIORITY')) {
       sentences.push('まだ序盤なので、今は手を広く残します。次のツモで組み合わせが増える余地を優先します。');
     } else if (factors.has('EFFICIENCY_EDGE')) {
@@ -882,6 +902,13 @@ function turnExplanationParts(view, analysis) {
       const label = keepReason.type === 'chanta' ? 'チャンタ・字牌の重なり' : 'ホンイツ';
       planHead = planHead.map(sentence => sentence.startsWith('今の本線は')
         ? `まだ本線を一本に決めない牌姿です。手なりと${label}の両にらみで進めます。`
+        : sentence);
+    }
+    // 降り・回し(現物)を選んだ手番で「高い手を狙います」と言わない(2026-08-22ペルソナ検品)
+    if (factors.has('FOLD_ON_RIICHI_THREAT') || factors.has('LEAD_PROTECT_FOLD') ||
+        factors.has('RIICHI_COMMON_GENBUTSU')) {
+      planHead = planHead.map(sentence => sentence.includes('多少効率を落としても高い手を狙います')
+        ? '本当は打点が欲しい点棒状況ですが、今は当たる危険が上回るため、守りを優先します。'
         : sentence);
     }
   }
@@ -1036,6 +1063,7 @@ function shortHeadline(phase, view, analysis, offer = null) {
     const honor = selectedHonorContext(view, action);
     if (honor && !honor.value && honor.copies === 1) return '役にならない字牌を先に切る';
     if (honor && honor.value && honor.copies === 1) return '重なり待ちの役牌より、手の伸びを取る';
+    if (factors.has('LEAD_PROTECT_FOLD')) return 'リードを守るため、安全牌で締める';
     if (factors.has('FOLD_ON_RIICHI_THREAT') || factors.has('RIICHI_LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_COMMON_GENBUTSU')) {
       return 'リーチ者への危険度を下げる';
     }
