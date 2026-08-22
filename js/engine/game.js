@@ -646,7 +646,7 @@ export class Game {
       if (pl.riichi && !pl.waits) pl.waits = waitingTiles(toCounts(pl.hand), pl.melds.length);
 
       // --- 他家の反応 (ロン > ポン/カン > チー)。鳴き→打牌→さらに鳴き…の連鎖をループで処理 ---
-      let curClaim = await this.collectClaims(p, discarded);
+      let curClaim = await this.collectClaims(p, discarded, { riichiDeclaration: declaredRiichi });
       let curDiscarder = p, curTile = discarded;
       let claimed = false, ronResult = null;
       while (curClaim) {
@@ -764,7 +764,22 @@ export class Game {
   }
 
   // ロン/ポン/チーの募集。ロン優先。
-  async collectClaims(discarder, tile) {
+  // 宣言牌ロンでのリーチ取り消し(標準ルール): リーチは宣言牌が通って成立。
+  // 発声即成立(rules.riichiInstant)がオフなら、1000点を本人へ戻し供託から引く。
+  revokeRiichiDeclaration(seat) {
+    const pl = this.st.players[seat];
+    if (!pl?.riichi) return;
+    pl.riichi = false;
+    pl.doubleRiichi = false;
+    pl.ippatsu = false;
+    pl.waits = null;
+    this.points[seat] += 1000;
+    this.riichiSticks = Math.max(0, this.riichiSticks - 1);
+    const lastDiscard = pl.discards[pl.discards.length - 1];
+    if (lastDiscard?.riichi) lastDiscard.riichi = false;
+  }
+
+  async collectClaims(discarder, tile, { riichiDeclaration = false } = {}) {
     const st = this.st;
     const houtei = st.live.length === 0;
     // ロン (頭ハネ: 下家優先)
@@ -777,14 +792,28 @@ export class Game {
       };
       const win = this.tryWin(p, tile, publicWinFlags);
       if (!win) continue;
-      const range = this.publicWinScoreRange(p, tile, publicWinFlags);
+      // 標準ルールでは宣言牌ロン成立時にリーチ棒が本人へ戻るため、ロン判断に見せる
+      // 点数・順位プレビューからも取り消し予定の供託1本を除いて計算する
+      const standardRevoke = riichiDeclaration && !this.rules.riichiInstant;
+      const previewExtra = standardRevoke
+        ? { riichiSticks: Math.max(0, this.riichiSticks - 1) }
+        : null;
+      const previewOverrides = standardRevoke
+        ? {
+          riichiSticks: Math.max(0, this.riichiSticks - 1),
+          points: this.points.map((value, seat) => seat === discarder ? value + 1000 : value),
+        }
+        : {};
+      const range = this.publicWinScoreRange(p, tile, publicWinFlags, previewExtra);
       const winPreview = this.previewWin(
-        p, discarder, range?.minimumScore ?? win, range?.maximumScore ?? win);
+        p, discarder, range?.minimumScore ?? win, range?.maximumScore ?? win, previewOverrides);
       const offer = {
         type: 'ron', tile, from: discarder, winPreview,
       };
       const choice = await this.decideClaim(p, this.viewFor(p, null, { winPreview }), offer);
       if (choice.candidate.action === 'ron') {
+        // 標準ルール: 宣言牌ロンはリーチ不成立(1000点は本人へ戻し、供託に積まない)
+        if (riichiDeclaration && !this.rules.riichiInstant) this.revokeRiichiDeclaration(discarder);
         const result = await this.applyWin(p, discarder, this.tryWin(p, tile, { tsumo: false, houtei }), tile);
         return { action: 'ron', player: p, result };
       }
@@ -896,12 +925,12 @@ export class Game {
   }
 
   // 実際の裏表示牌を読まず、公開状態と矛盾しない最低点〜最大点を求める。
-  publicWinScoreRange(p, tile, flags) {
+  publicWinScoreRange(p, tile, flags, extraOverrides = null) {
     const pl = this.st.players[p];
     return scorePublicWinUraRange({
       scoreContext: this.winScoreContext(p, tile, { ...flags, publicOnly: true }),
       rules: this.rules,
-      extra: this.winScoreExtra(p),
+      extra: { ...this.winScoreExtra(p), ...(extraOverrides ?? {}) },
       hiddenIndicatorCount: hiddenUraIndicatorCount({
         riichi: pl.riichi,
         rules: this.rules,
@@ -926,16 +955,16 @@ export class Game {
 
   // 公開情報だけで算出した最低scoreと裏ドラ上限scoreの両方から、
   // 「最大でも4位」の場合だけラス確と証明する。
-  previewWin(winner, loser, publicScore, maximumPublicScore = publicScore) {
+  previewWin(winner, loser, publicScore, maximumPublicScore = publicScore, overrides = {}) {
     const common = {
       rules: this.rules,
-      points: this.points,
+      points: overrides.points ?? this.points,
       roundWindIdx: this.roundWindIdx,
       kyoku: this.kyoku,
       initialDealer: this.initialDealer,
       dealer: this.dealerOf(),
       honba: this.honba,
-      riichiSticks: this.riichiSticks,
+      riichiSticks: overrides.riichiSticks ?? this.riichiSticks,
       winner,
       loser,
     };

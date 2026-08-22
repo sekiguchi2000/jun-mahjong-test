@@ -22,6 +22,8 @@ export const DEFAULT_RULES = Object.freeze({
   kanUra: true,              // 槓裏あり
   kanDora: true,             // 槓ドラあり
   riichiBelow1000: false,    // 持ち点1000未満でもリーチ可
+  riichiInstant: false,      // 発声即リーチ成立(true=宣言牌がロンされても供託・成立扱い)
+                             // false(標準)=宣言牌が通って成立。宣言牌ロンなら1000点は本人に戻る
   // --- 和了・特殊ルール ---
   doubleYakuman: true,       // ダブル役倍(大四喜・国士13面待ち等)あり
   kazoeYakuman: true,        // 数え役満あり(false=三倍満止まり)
@@ -50,6 +52,7 @@ export const RULE_SCHEMA = [
   { key: 'kuitan', label: '喰いタン', type: 'bool' },
   { key: 'atozuke', label: '後付け', type: 'bool', labels: ['あり', 'なし(完全先付け)'] },
   { key: 'kiriage', label: '切り上げ満貫', type: 'bool' },
+  { key: 'riichiInstant', label: '発声即リーチ成立', type: 'bool' },
   { key: 'ippatsu', label: '一発', type: 'bool' },
   { key: 'uraDora', label: '裏ドラ', type: 'bool' },
   { key: 'kanDora', label: '槓ドラ', type: 'bool' },
