@@ -5,6 +5,7 @@
 import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=18';
 import { isDragon, isHonor, numOf, doraFromIndicator, tileName } from './tiles.js';
 import { decomposeBlocks, evaluateHandPlans, tileRetentionValue } from './hand-plans.js';
+import { describeThreatRead, describeCushion } from './threat-read.js';
 
 export const DECISION_COACH_VERSION = 'v2-candidate-comparison-coach';
 
@@ -854,9 +855,25 @@ function turnExplanationParts(view, analysis) {
     } else {
       sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
     }
-    // 打点対比 (カルテ21号): 相手リーチが高そうで自手が安いときは、その判断軸を言う
+    // 読みの言語化 (2026-08-22ユーザー設計): 相手の高さを証拠つきで見積もり、
+    // 「あがられたときの傷の深さ」「押す見返り」まで一続きで説明する
+    const threatRead = (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_READ');
+    if (threatRead?.read) {
+      const relativeNames = ['あなた', '下家', '対面', '上家'];
+      const labels = [0, 1, 2, 3].map(seat => relativeNames[(seat - (view?.me ?? 0) + 4) % 4]);
+      const readText = describeThreatRead(threatRead.read, labels);
+      if (readText) sentences.push(readText);
+      const cushionText = describeCushion(threatRead.cushion, threatRead.read);
+      const gainEV = threatRead.prospect?.gainEV ?? 0;
+      const ratio = gainEV / Math.max(1, threatRead.read.expectedLoss);
+      const prospectText = ratio >= 0.45 ? 'こちらの手にも押す見返りが十分あります。'
+        : ratio >= 0.2 ? 'こちらの見返りは中くらいです。'
+        : 'こちらの手は見返りが小さい形です。';
+      if (cushionText) sentences.push(cushionText + prospectText);
+    }
+    // 打点対比 (カルテ21号): 読みが無いときの後詰め(通常はTHREAT_READが言う)
     {
-      const contrast = (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_VALUE_CONTRAST');
+      const contrast = threatRead ? null : (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_VALUE_CONTRAST');
       if (contrast) {
         const threatParts = [];
         if ((contrast.threatKans ?? 0) > 0) threatParts.push('カンが入り');

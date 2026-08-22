@@ -17,6 +17,7 @@ import {
 import { shanten } from './shanten.js';
 import { canDeclareRiichi } from './legal-actions.js';
 import { evaluateHandPlans, tileRetentionValue, PLAN_SCALE, decomposeBlocks } from './hand-plans.js';
+import { readThreats, handProspect, placementCushion, pushScales } from './threat-read.js';
 
 export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 
@@ -1096,11 +1097,27 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
     const indicators = view.public?.doraIndicators?.length ?? 1;
     const threatKans = threats.reduce((sum, threat) =>
       sum + (threat.pl.melds ?? []).filter(meld => (meld.tiles?.length ?? 0) === 4).length, 0);
-    const threatScale = Math.min(2.2, 1 + 0.35 * Math.max(0, indicators - 1) + 0.3 * threatKans);
     const ownValueTiles = handAll.filter(tile =>
       tile.red || context.doraKinds.includes(tile.kind)).length;
-    const cheapScale = ownValueTiles >= 2 ? 1 : ownValueTiles === 1 ? 1.15 : 1.3;
-    context.threatValue = { threatScale, cheapScale, indicators, threatKans, ownValueTiles };
+    // 読みの層 (2026-08-22ユーザー設計): 相手の打点を証拠から推定し、
+    // 順位の傷の深さ・自手の見返りまで含めて押し引きの強さを決める
+    const read = readThreats(view);
+    const prospect = handProspect({
+      shanten: currentShanten,
+      liveWaits: 5,
+      remaining: view.public?.remaining,
+      valueTiles: ownValueTiles,
+      menzen: meldCount === 0,
+    });
+    const cushion = placementCushion(view, read?.expectedLoss ?? 5200);
+    const scales = pushScales(read, cushion, prospect);
+    // threatScale/cheapScaleは互換名を維持しつつ、中身を読みベースへ置換
+    context.threatValue = {
+      threatScale: scales.lossScale,
+      cheapScale: scales.incentiveScale * scales.cushionScale,
+      indicators, threatKans, ownValueTiles,
+      read, cushion, prospect, scales,
+    };
   }
   const forbiddenWin = optionSet.has('tsumo') && isForbiddenLastPlaceWin(view.winPreview);
   const sanitizedWinPreview = copyKnown(view.winPreview, WIN_PREVIEW_KEYS);
@@ -1108,6 +1125,14 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   const facts = turnFacts(view, options, handAll, meldCount, currentShanten, threats, context);
   if (context.threatValue && (context.threatValue.threatScale > 1 || context.threatValue.cheapScale > 1)) {
     facts.push({ code: 'THREAT_VALUE_CONTRAST', ...context.threatValue });
+  }
+  if (context.threatValue?.read) {
+    facts.push({
+      code: 'THREAT_READ',
+      read: context.threatValue.read,
+      cushion: context.threatValue.cushion,
+      prospect: context.threatValue.prospect,
+    });
   }
   const estimates = [...context.flushSignals, ...context.pressureSignals];
   const coverage = {
@@ -1284,8 +1309,20 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   // 打点対比 (カルテ21号): 相手のリーチが高そう(カン・ドラ表示増)で自手が安いときは
   // 降りの閾値を1段早める(analystは1向聴から降り)。テンパイからは降ろさない
   const highContrast = context.threatValue &&
-    context.threatValue.threatScale >= 1.3 && context.threatValue.cheapScale >= 1.15;
+    context.threatValue.threatScale >= 1.3 && context.threatValue.cheapScale >= 1.1;
   let effectiveFoldAt = highContrast ? Math.min(style.foldAt, Math.max(1, style.foldAt - 1)) : style.foldAt;
+  // 読みベースの押し引き段差 (2026-08-22): 高額読み×傷が深い→1段早く引く。
+  // 安め読み×傷が浅い×見返りあり→1段粘る。効率・ダイスケは対象外
+  if (Number.isFinite(style.foldAt) && !style.ignoreRisk && context.threatValue?.read) {
+    const band = context.threatValue.read.band;
+    const cushionLevel = context.threatValue.cushion?.level;
+    const gainEV = context.threatValue.prospect?.gainEV ?? 0;
+    if ((band === 'expensive' || band === 'severe') && (cushionLevel === 'thin' || cushionLevel === 'fatal')) {
+      effectiveFoldAt = Math.max(0, effectiveFoldAt - 1);
+    } else if (band === 'cheap' && cushionLevel === 'deep' && gainEV >= 1200) {
+      effectiveFoldAt = effectiveFoldAt + 1;
+    }
+  }
   // リード保護のベタ降り (2026-08-22ペルソナ検品): 大差リード×安手×(複数リーチ or 終盤)は
   // テンパイでも降りる。攻め思考でも「既に1位ならその1位を守る」のが1位狙い。
   // 効率・ダイスケ(ignoreRisk)は思想どおり押し続ける。
