@@ -17,7 +17,7 @@ import {
 import { shanten } from './shanten.js';
 import { canDeclareRiichi } from './legal-actions.js';
 import { evaluateHandPlans, tileRetentionValue, PLAN_SCALE, decomposeBlocks } from './hand-plans.js';
-import { readThreats, handProspect, placementCushion, pushScales } from './threat-read.js';
+import { readThreats, handProspect, placementCushion, pushScales, estimateOpenThreat } from './threat-read.js';
 
 export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 
@@ -548,6 +548,12 @@ function opponentPressureSignals(view, flushSignals) {
       score += 0.25;
       evidence.flushSignal = true;
     }
+    // 副露の見え打点(ドラポン・赤・役牌・染め): 河に出ない確定情報を圧に足す(v90)
+    const openRead = estimateOpenThreat(view, seat);
+    if (openRead) {
+      score += openRead.visibleHan >= 4 ? 0.9 : 0.5;
+      evidence.openVisibleHan = openRead.visibleHan;
+    }
     // 赤ドラを切る=手が完成に近い強い信号(手出しは特に。カルテ26号)
     const redTedashi = discards.some(item => item?.tile?.red && item.tsumogiri === false);
     const redTsumogiri = discards.some(item => item?.tile?.red && item.tsumogiri === true);
@@ -798,13 +804,18 @@ function discardCandidate({
       remaining: remainingCopies(visible, kind),
     })).filter(item => item.remaining > 0);
     const liveWaits = liveWaitsByKind.reduce((sum, item) => sum + item.remaining, 0);
+    // フリテンリーチ禁止 (2026-08-22 自走検品v90): 待ちが自分の河にあるとロンできない。
+    // ツモ専に手を固定するリーチは全思考で打たない(ダマでツモ・待ち替わりを待つ)
+    const furitenWait = waits.some(kind =>
+      (view.public?.players?.[view.me]?.discards ?? []).some(discard => discard.tile.kind === kind));
     riichiEvaluation = {
       waitKinds: waits,
       physicalRemaining: liveWaits,
       byKind: liveWaitsByKind,
       requiredMinimum: style.riichiLiveMin,
+      furiten: furitenWait,
     };
-    declareRiichi = liveWaits >= style.riichiLiveMin && style.neverRiichi !== true;
+    declareRiichi = liveWaits >= style.riichiLiveMin && style.neverRiichi !== true && !furitenWait;
     // リーチ保留 (カルテ26号): 2筒切りテンパイでも「リーチするかは別の話」。
     // 待ちが薄く、手に成長余地(タンヤオ化・待ちの良形化)があるか場に圧があるなら、
     // 手を固定するリーチを控えてダマで様子を見る。効率モードだけは常に即リーチ。
@@ -930,10 +941,16 @@ function isValueHonor(kind, view) {
 // chosen側はtypeが'taatsu'へ正規化されるため、kindsの並びから形を導出する
 function taatsuWaitKinds(block) {
   const kinds = block?.kinds ?? [];
+  if (block?.type === 'run' || block?.type === 'set') return []; // 完成面子は待たない
   if (kinds.length < 2 || kinds.length > 3 || kinds[0] >= 27) return [];
   const suitBase = Math.floor(kinds[0] / 9) * 9;
   const within = kind => kind >= suitBase && kind < suitBase + 9;
-  if (kinds.length === 3) return [kinds[0] + 1, kinds[1] + 1]; // リャンカン
+  if (kinds.length === 3) {
+    // リャンカン(a, a+2, a+4)だけが対象。完成順子(連続3枚)は待ちを持たない
+    return (kinds[1] - kinds[0] === 2 && kinds[2] - kinds[1] === 2)
+      ? [kinds[0] + 1, kinds[1] + 1]
+      : [];
+  }
   const [low, high] = kinds;
   if (high - low === 1) return [low - 1, high + 1].filter(within); // 両面・辺張
   if (high - low === 2) return [low + 1];                          // 嵌張
@@ -1154,6 +1171,14 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
     .map((player, i) => ({ pl: player, i }))
     .filter(threat => threat.i !== view.me && threat.pl.riichi)
     .map(threat => ({ ...threat, passedKinds: passedKindsForThreat(view, threat.pl) }));
+  // 見えているだけで満貫級の副露(ドラポン+役牌等)はリーチ同等の撤退対象として扱う(v90)
+  for (const [seat, player] of (view.public?.players ?? []).entries()) {
+    if (seat === view.me || player.riichi) continue;
+    const openRead = estimateOpenThreat(view, seat);
+    if (openRead && openRead.visibleHan >= 4) {
+      threats.push({ pl: player, i: seat, passedKinds: [], openThreat: true });
+    }
+  }
   const context = strategicContext(view);
   // プラン列挙は手牌全体から1回だけ (各打牌候補で共有)
   context.planContext.specialPlans = style.specialPlans === true;
@@ -1175,6 +1200,7 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
       remaining: view.public?.remaining,
       valueTiles: ownValueTiles,
       menzen: meldCount === 0,
+      pot: (view.public?.riichiSticks ?? 0) * 1000 + (view.public?.honba ?? 0) * 300,
     });
     const cushion = placementCushion(view, read?.expectedLoss ?? 5200);
     const scales = pushScales(read, cushion, prospect);

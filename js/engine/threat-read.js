@@ -107,12 +107,57 @@ export function estimateRiichiValue(view, seat) {
   return { seat, expectedLoss, manganPlusProb, band, isDealer, evidence };
 }
 
-// 全リーチ者の読みをまとめる。expectedLossは最大の相手を代表値にする
+// 副露(リーチなし)の見えている打点読み。ドラのポン・赤・役牌・染め気配は
+// 河に出ないぶん見落とされやすいが、確定情報として最も硬い読み。
+// 見えて2翻未満は「普通の仕掛け」としてスレート扱いしない。
+const OPEN_HAN_LOSS = { 2: 2000, 3: 3900, 4: 8000, 5: 8000, 6: 12000 };
+
+export function estimateOpenThreat(view, seat) {
+  const player = view.public?.players?.[seat];
+  if (!player || player.riichi) return null;
+  const melds = player.melds ?? [];
+  if (melds.length === 0) return null;
+  const doraKinds = (view.public?.doraIndicators ?? []).map(tile => doraFromIndicator(tile.kind));
+  const dealer = view.public?.dealer ?? 0;
+  const seatWindKind = 27 + ((seat - dealer + 4) % 4);
+  const roundWindKind = view.roundWind ?? 27;
+  const evidence = [];
+  let meldDora = 0;
+  let redCount = 0;
+  let yakuhaiMelds = 0;
+  for (const meld of melds) {
+    for (const tile of meld.tiles ?? []) {
+      if (doraKinds.includes(tile.kind)) meldDora++;
+      if (tile.red) redCount++;
+    }
+    const kind = meld.tiles?.[0]?.kind;
+    if (kind !== undefined && (kind >= 31 || kind === seatWindKind || kind === roundWindKind)) yakuhaiMelds++;
+  }
+  if (meldDora > 0) evidence.push({ code: 'MELD_DORA', count: meldDora });
+  if (redCount > 0) evidence.push({ code: 'MELD_RED', count: redCount });
+  if (yakuhaiMelds > 0) evidence.push({ code: 'YAKUHAI_MELD', count: yakuhaiMelds });
+  const numberKinds = melds.flatMap(meld => (meld.tiles ?? []).map(tile => tile.kind)).filter(kind => kind < 27);
+  const flushy = melds.length >= 2 && numberKinds.length > 0 &&
+    new Set(numberKinds.map(kind => Math.floor(kind / 9))).size === 1;
+  if (flushy) evidence.push({ code: 'OPEN_FLUSH_SHAPE' });
+  const visibleHan = meldDora + redCount + yakuhaiMelds + (flushy ? 2 : 0);
+  if (visibleHan < 2) return null;
+  const isDealer = dealer === seat;
+  const expectedLoss = Math.round(
+    (OPEN_HAN_LOSS[Math.min(6, visibleHan)] ?? 12000) * (isDealer ? 1.5 : 1) / 100) * 100;
+  const band = expectedLoss < 4500 ? 'cheap'
+    : expectedLoss < 6500 ? 'mid'
+    : expectedLoss < 9000 ? 'expensive'
+    : 'severe';
+  return { seat, expectedLoss, band, isDealer, evidence, open: true, visibleHan };
+}
+
+// 全リーチ者+高打点副露者の読みをまとめる。expectedLossは最大の相手を代表値にする
 export function readThreats(view) {
   const reads = [];
   for (let seat = 0; seat < (view.public?.players?.length ?? 0); seat++) {
     if (seat === view.me) continue;
-    const read = estimateRiichiValue(view, seat);
+    const read = estimateRiichiValue(view, seat) ?? estimateOpenThreat(view, seat);
     if (read) reads.push(read);
   }
   if (reads.length === 0) return null;
@@ -121,7 +166,7 @@ export function readThreats(view) {
 }
 
 // 自手の見返り: あがれる確率×打点の概算。欲を数字にする(高い手でも届かなければ価値0)
-export function handProspect({ shanten, liveWaits = 0, remaining = 70, valueTiles = 0, menzen = true }) {
+export function handProspect({ shanten, liveWaits = 0, remaining = 70, valueTiles = 0, menzen = true, pot = 0 }) {
   const drawsLeft = Math.max(0, Math.floor((remaining ?? 0) / 4));
   let winProb;
   if (shanten === 0) {
@@ -133,8 +178,9 @@ export function handProspect({ shanten, liveWaits = 0, remaining = 70, valueTile
   } else {
     winProb = drawsLeft >= 10 ? 0.04 : 0.01;
   }
+  // 供託・積み棒はあがった者が総取り=押しの見返りに直結する(v90)
   const value = 2600 + 1400 * Math.min(4, valueTiles) + (menzen && shanten <= 1 ? 1800 : 0);
-  return { winProb, value, gainEV: Math.round(winProb * value), drawsLeft };
+  return { winProb, value, pot, gainEV: Math.round(winProb * (value + pot)), drawsLeft };
 }
 
 // 順位の傷読み: 期待失点を直撃で払ったとき、順位が落ちるか・取り返す余裕はあるか
@@ -187,11 +233,18 @@ export function describeThreatRead(read, seatLabels = ['あなた', '下家', '�
       case 'LATE_HONOR_CUTS': parts.push('字牌を終盤まで抱えていた河'); break;
       case 'EARLY_RIICHI': parts.push(`${item.turn}巡目の早いリーチ`); break;
       case 'DEALER_RIICHI': parts.push('親リーチ'); break;
+      case 'MELD_DORA': parts.push(`ドラを${item.count}枚さらしている`); break;
+      case 'MELD_RED': parts.push(`赤${item.count}枚が副露に見えている`); break;
+      case 'YAKUHAI_MELD': parts.push('役牌のポン'); break;
+      case 'OPEN_FLUSH_SHAPE': parts.push('副露が一色に寄っている'); break;
       default: break;
     }
   }
   const bandLabel = { cheap: '安め', mid: '平均的', expensive: '高め', severe: '満貫級以上' }[worst.band];
   const evidenceText = parts.length > 0 ? `（${parts.join('・')}）` : '';
+  if (worst.open) {
+    return `${who}はリーチこそしていませんが、副露が見えているだけで${worst.visibleHan}翻あり、${bandLabel}の危険とみます${evidenceText}。放銃なら${worst.expectedLoss}点前後を見込みます。`;
+  }
   return `${who}のリーチは${bandLabel}とみます${evidenceText}。放銃なら${worst.expectedLoss}点前後を見込みます。`;
 }
 

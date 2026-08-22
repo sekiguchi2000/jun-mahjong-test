@@ -794,6 +794,10 @@ function turnExplanationParts(view, analysis) {
   const metrics = selected?.metrics ?? {};
   const context = publicContext(view);
   const phaseFact = (analysis?.facts ?? []).find(fact => fact.code === 'ROUND_PHASE');
+  // 脅威がリーチでなく満貫級の副露のときは、文中の主語を差し替える(v90)
+  const threatReadFact = (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_READ');
+  const openOnlyThreat = threatReadFact?.read?.worst?.open === true;
+  const threatNoun = openOnlyThreat ? '満貫級が見えている副露の相手' : '相手のリーチ';
   const sentences = [];
 
   if (action?.action === 'tsumo') {
@@ -806,6 +810,11 @@ function turnExplanationParts(view, analysis) {
     } else if (action.riichi) sentences.push('この牌を切ると、待ちを残したままリーチできます。');
     // リーチ保留 (カルテ26号): 「切る牌」と「リーチするか」は別の判断として説明する
     const riichiInfo = metrics?.riichiEvaluation;
+    // フリテンリーチ禁止(v90): 待ちが自分の河にあるテンパイはダマの理由を明言する
+    if (!action.riichi && riichiInfo?.furiten && metrics.shanten === 0) {
+      const furitenWaitNames = (riichiInfo.waitKinds ?? []).map(kind => tileName(kind)).join('・');
+      sentences.push(`テンパイですが、待ちの${furitenWaitNames}はあなたが既に切っているためフリテンで、ロンあがりできません。ツモ専用に手を固定するリーチは打たず、ダマでツモか待ち替わりを狙います。`);
+    }
     if (!action.riichi && riichiInfo?.holdBack) {
       const hold = riichiInfo.hold ?? {};
       const growth = [];
@@ -859,9 +868,9 @@ function turnExplanationParts(view, analysis) {
         (metrics.safety?.maxRisk ?? 1) === 0;
       const attackVoice = analysis?.profile === 'attack' ? '攻め思考でも、この手は押す見返りが足りません。' : '';
       if (hasSafetyEvidence) {
-        sentences.push(`${attackVoice}相手のリーチに対して、無筋を切ってまで最速を追う見返りが小さい形です。通っている牌や危険の低い牌で手を回し、テンパイの芽は残します。`);
+        sentences.push(`${attackVoice}${threatNoun}に対して、無筋を切ってまで最速を追う見返りが小さい形です。通っている牌や危険の低い牌で手を回し、テンパイの芽は残します。`);
       } else {
-        sentences.push(`${attackVoice}相手のリーチに対して完全に通る牌がない手です。最速は追わず、持っている中では危険度が低めの牌で回して、テンパイの芽は残します。`);
+        sentences.push(`${attackVoice}${threatNoun}に対して完全に通る牌がない手です。最速は追わず、持っている中では危険度が低めの牌で回して、テンパイの芽は残します。`);
       }
     } else if (factors.has('EARLY_EFFICIENCY_PRIORITY')) {
       sentences.push('まだ序盤なので、今は手を広く残します。次のツモで組み合わせが増える余地を優先します。');
@@ -872,9 +881,9 @@ function turnExplanationParts(view, analysis) {
     } else if (factors.has('SUIT_PRESSURE_AVOIDED')) {
       sentences.push('相手の捨て牌が一色に寄って見えるので、その色の牌を不用意に切らないようにします。');
     } else if (factors.has('RIICHI_COMMON_GENBUTSU')) {
-      sentences.push('相手のリーチに対して完全に通っている牌があります。ここは無理をせず、現物から切って安全に進めます。');
+      sentences.push(`${threatNoun}に対して完全に通っている牌があります。ここは無理をせず、現物から切って安全に進めます。`);
     } else if (factors.has('LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_SAFE_TILE')) {
-      sentences.push('相手にリーチがあるので、完全な安全牌ではなくても、公開情報から比べて危険度が低い牌を選びます。');
+      sentences.push(`${openOnlyThreat ? '満貫級が見えている副露の相手がいるので' : '相手にリーチがあるので'}、完全な安全牌ではなくても、公開情報から比べて危険度が低い牌を選びます。`);
     } else {
       sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
     }
@@ -1113,6 +1122,8 @@ function shortHeadline(phase, view, analysis, offer = null) {
     if (honor && honor.value && honor.copies === 1) return '重なり待ちの役牌より、手の伸びを取る';
     if (factors.has('LEAD_PROTECT_FOLD')) return 'リードを守るため、安全牌で締める';
     if (factors.has('FOLD_ON_RIICHI_THREAT') || factors.has('RIICHI_LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_COMMON_GENBUTSU')) {
+      const readFact = (analysis?.facts ?? []).find(fact => fact.code === 'THREAT_READ');
+      if (readFact?.read?.worst?.open === true) return '満貫級が見える副露を警戒して危険度を下げる';
       return 'リーチ者への危険度を下げる';
     }
     if (factors.has('SUIT_PRESSURE_AVOIDED')) return '相手の色に合わせて危険牌を避ける';
