@@ -115,7 +115,7 @@ function candidateTile(view, candidate) {
 // ---- v12 プラン評価の言語化 ----
 
 const PLAN_LABELS = {
-  TANYAO_PINFU: 'タンヤオ・ピンフ系（3900点以上狙い）',
+  TANYAO_PINFU: 'タンヤオ・ピンフ系（3900点以上狙い）', // ※表示時はplanLabelForで手の実態に合わせて言い分ける
   YAKUHAI_PAIR: '役牌の速攻',
   HONITSU: 'ホンイツ',
   CHANTA: 'チャンタ',
@@ -133,12 +133,40 @@ const PLAN_NOTE_PHRASES = {
   RED_TILE: '赤牌',
 };
 
-function planKeepPhrase(planEvaluation) {
+// TANYAO_PINFUプランの看板を手の実態で言い分ける(2026-08-24ユーザー指摘):
+// 123mが完成している手に「タンヤオ」と言わない。暗刻や役牌対子のある手に「ピンフ」と言わない。
+// プラン名は内部コードのままでも、表示は嘘をつかない。
+function planLabelFor(code, view) {
+  if (code !== 'TANYAO_PINFU' || !view) return PLAN_LABELS[code] ?? code;
+  const handAll = handAllOf(view);
+  const isYaochuKind = kind => kind >= 27 || numOf(kind) === 1 || numOf(kind) === 9;
+  const { chosen } = decomposeBlocks(handAll, coachPlanContext(view));
+  // 骨組みに選ばれたブロック(完成面子・対子・搭子)に么九牌が入っているなら、
+  // タンヤオはその骨を壊さないと成立しない=本線と呼ばない。浮きの么九牌は整理できるので許容
+  const chosenHasYaochu = chosen.some(block => block.kinds.some(isYaochuKind));
+  const meldHasYaochu = (view.melds ?? []).some(meld =>
+    (meld.tiles ?? []).some(tile => isYaochuKind(tile.kind)));
+  const yaochuTiles = handAll.filter(tile => isYaochuKind(tile.kind)).length;
+  const tanyaoViable = !chosenHasYaochu && !meldHasYaochu && yaochuTiles <= 2;
+  const counts = {};
+  for (const tile of handAll) counts[tile.kind] = (counts[tile.kind] ?? 0) + 1;
+  const ankoCount = Object.keys(counts).filter(kind => counts[kind] >= 3).length;
+  const yakuhaiPair = Object.keys(counts).map(Number).some(kind =>
+    counts[kind] >= 2 && kind >= 27 &&
+    (isDragon(kind) || kind === view.seatWind || kind === view.roundWind));
+  const pinfuViable = (view.melds ?? []).length === 0 && ankoCount === 0 && !yakuhaiPair;
+  if (tanyaoViable && pinfuViable) return 'タンヤオ・ピンフ系（3900点以上狙い）';
+  if (tanyaoViable) return 'タンヤオ系（リーチや赤と合わせて打点を作る）';
+  if (pinfuViable) return 'ピンフ系（リーチと合わせて3900点以上狙い）';
+  return '手なり（役はリーチで付ける）';
+}
+
+function planKeepPhrase(planEvaluation, view = null) {
   for (const note of planEvaluation?.notes ?? []) {
     if (PLAN_NOTE_PHRASES[note]) return PLAN_NOTE_PHRASES[note];
   }
   const top = planEvaluation?.topPlans?.[0]?.code;
-  if (top && PLAN_LABELS[top]) return `${PLAN_LABELS[top]}の本線に入る牌`;
+  if (top && PLAN_LABELS[top]) return `${planLabelFor(top, view)}の本線に入る牌`;
   return null;
 }
 
@@ -328,7 +356,7 @@ function acceptanceSentence(metrics) {
 
 // 「広さで負けているのに選んだ」理由の内訳: 効用補正の差が最大の要因を名指しする。
 // 定型の「見えている価値や相手の捨て牌を優先して」で済まさない(2026-08-19指摘)
-export function dominantKeepReason(altCandidate, selectedCandidate, altName) {
+export function dominantKeepReason(altCandidate, selectedCandidate, altName, view = null) {
   const altAdjustments = altCandidate?.metrics?.utilityAdjustments ?? {};
   const selectedAdjustments = selectedCandidate?.metrics?.utilityAdjustments ?? {};
   const phrases = {
@@ -347,7 +375,7 @@ export function dominantKeepReason(altCandidate, selectedCandidate, altName) {
   }
   if (!bestKey) return null;
   if (bestKey === 'planRetention') {
-    const keep = planKeepPhrase(altCandidate?.metrics?.planEvaluation);
+    const keep = planKeepPhrase(altCandidate?.metrics?.planEvaluation, view);
     return keep ? `${altName}は${keep}のため` : `${altName}の方が手の形として残す価値が高いため`;
   }
   return phrases[bestKey];
@@ -376,7 +404,7 @@ function planAlternativeParts(view, analysis) {
       if (!best || value < best.value) best = { tile, value };
     }
     if (best && selectedTile && (best.tile.kind !== selectedTile.kind || best.tile.red !== selectedTile.red)) {
-      parts.push(`${PLAN_LABELS[plan.code] ?? plan.code}を狙うなら、${tileName(best.tile.kind, best.tile.red)}を切る分岐もあります。`);
+      parts.push(`${planLabelFor(plan.code, view)}を狙うなら、${tileName(best.tile.kind, best.tile.red)}を切る分岐もあります。`);
     }
     if (parts.length >= 2) break;
   }
@@ -549,7 +577,7 @@ function planHeadlineSentences(selected, view) {
     } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
       sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
     } else {
-      sentences.push(`今の本線は${PLAN_LABELS[top.code]}です。`);
+      sentences.push(`今の本線は${planLabelFor(top.code, view)}です。`);
     }
   } else if (top) {
     sentences.push('はっきりした役の本線はまだ無い牌姿です。まずは形のテンパイを目指し、役はリーチや途中の変化で付けます。');
@@ -668,7 +696,7 @@ function comparisonParts(view, analysis) {
     const altPlan = metrics.planEvaluation;
     const selPlan = selectedMetrics.planEvaluation;
     if (delta === 0 && altPlan && selPlan && altPlan.retention - selPlan.retention > 0.2) {
-      const keepPhrase = planKeepPhrase(altPlan);
+      const keepPhrase = planKeepPhrase(altPlan, view);
       if (keepPhrase) {
         parts.push(`${name}を切る案も手の進み方は同じですが、${name}は${keepPhrase}なので手に残し、${selectedName}を先に切ります。`);
         continue;
@@ -716,7 +744,7 @@ function comparisonParts(view, analysis) {
         parts.push(`${name}を切る案の方が受け入れは${-delta}枚広いですが、その場合に残る${shape.kinds.map(kind => tileName(kind)).join('')}の形は、あなたが${riverWait !== undefined ? tileName(riverWait) : '待ち牌'}を既に切っているため完成してもフリテン（ロンあがりできない待ち）です。広さの中身が目減りするので、${selectedName}を選びます。`);
         continue;
       }
-      const reason = dominantKeepReason(candidate, selected, name);
+      const reason = dominantKeepReason(candidate, selected, name, view);
       parts.push(reason
         ? `${name}を切る案の方が受け入れは${-delta}枚広いですが、${reason}、${selectedName}を先に切ります。`
         : `${name}を切る案の方が受け入れは${-delta}枚広く、ほぼ互角です。残す価値の合計でわずかに${selectedName}切りを取っています。`);
