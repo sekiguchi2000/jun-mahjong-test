@@ -861,3 +861,6 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
   content: attr(data-initial);
   font-size: 1.05em;
 }
+
+/* デバッグボタン(v98): 通常UIと見分けが付くよう控えめな警告色 */
+.debug-button { border-color: rgba(255, 170, 90, .5); color: #f2b06a; font-size: 13px; }

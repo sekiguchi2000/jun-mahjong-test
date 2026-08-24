@@ -31,7 +31,7 @@ import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../en
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
 import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=2';
 import {
-  ProgressionTracker, loadProgression, levelFromExp, levelLabel, levelProgress,
+  ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
   clampRulesToLevel, ruleValueUnlockLevel, achievementRows, UNLOCKS,
 } from '../engine/progression.js?v=1';
@@ -584,6 +584,12 @@ class UI {
     $('#pause-export-reports')?.addEventListener('click', () => this.exportAreReportsToFile());
     $('#btn-stats')?.addEventListener('click', () => this.openStatsDialog());
     $('#btn-achievements')?.addEventListener('click', () => this.openAchievementsDialog());
+    // デバッグ: Lv99=全解除状態にする(2026-08-24ユーザー依頼)。Expを98000へ引き上げて再読込
+    $('#btn-debug-lv99')?.addEventListener('click', () => {
+      this.progression.data.exp = Math.max(this.progression.data.exp, 98000);
+      saveProgression(this.progression.data, this.preferenceStorage);
+      location.reload();
+    });
     $('#achievements-close')?.addEventListener('click', () => $('#achievements-dialog')?.close());
     this.renderTitleProgression();
     $('#stats-close')?.addEventListener('click', () => $('#stats-dialog')?.close());
