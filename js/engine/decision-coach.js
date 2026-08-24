@@ -339,6 +339,13 @@ function blockGrowthSentence(view, action, selectedMetrics) {
       parts.push(`${block.kinds.map(kind => tileName(kind)).join('')}（${tileName(block.kinds[0] + 1)}か${tileName(block.kinds[1] + 1)}で完成）`);
     }
   }
+  // 対子が2つ以上あるときは、片方が雀頭・もう片方は3枚目で面子になる成長要員(カルテ41号:
+  // 「伸ばしたい形」が搭子しか言わず、受け入れの大半(対子の暗刻化)を説明しない穴)
+  const pairBlocks = chosen.filter(block => block.type === 'pair');
+  if (pairBlocks.length >= 2) {
+    const pairNames = pairBlocks.map(block => `${tileName(block.kinds[0])}${tileName(block.kinds[0])}`).join('・');
+    parts.push(`${pairNames}（どちらかが雀頭、3枚目を引けば面子）`);
+  }
   const unique = [...new Set(parts)];
   if (unique.length === 0) return '';
   return `伸ばしたい形は ${unique.slice(0, 3).join('、')}。`;
@@ -652,6 +659,7 @@ function comparisonParts(view, analysis) {
   const honorNarrowerNames = [];
   let honorNarrowerDelta = null;
   let furitenClauseSaid = false;
+  let narrowerNoted = false;
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
     const name = tileName(tile.kind, tile.red);
@@ -690,8 +698,15 @@ function comparisonParts(view, analysis) {
       if (honorNarrowerDelta === null || delta < honorNarrowerDelta) honorNarrowerDelta = delta;
       continue;
     }
-    // 受け入れが狭いだけの案は列挙しない(受け入れの中身は本文で説明済み)
-    if (delta > 0) continue;
+    // 受け入れが狭いだけの案は原則列挙しないが、最有力の対案1つだけは一言添える
+    // (カルテ41号: 見出しが「◯より広い」と比較するのに本文に◯が出ない不整合の解消)
+    if (delta > 0) {
+      if (!narrowerNoted && delta <= 3 && candidate.metrics?.shanten === selectedMetrics.shanten) {
+        narrowerNoted = true;
+        parts.push(`${name}を切る案も互角に近いですが、受け入れが${delta}枚狭くなります。`);
+      }
+      continue;
+    }
     // v12: 受け入れ同数の分かれ目はプラン価値で説明する
     const altPlan = metrics.planEvaluation;
     const selPlan = selectedMetrics.planEvaluation;
