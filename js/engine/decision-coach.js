@@ -672,6 +672,14 @@ function comparisonParts(view, analysis) {
     const delta = selectedMetrics.ukeirePhysical - metrics.ukeirePhysical;
     // 判断の分かれる字牌の対案は必ず具体的に言う(2026-08-19指定:
     // 「なんで南や白じゃないのか」を曖昧語でなく牌ごとの理由で説明する)
+    // 字牌の対子を残して数牌を切るとき、対子の本当の価値(雀頭・安全牌)と
+    // 「最終的に手放す可能性」まで言う(カルテ43号: 枚数だけの理由づけをやめる)
+    if (isHonor(tile.kind) &&
+        handAllOf(view).filter(item => item.kind === tile.kind).length >= 2 &&
+        !valueHonor(tile, view) && selectedTile && !isHonor(selectedTile.kind)) {
+      parts.push(`${name}から整理する選択も十分あります。${name}の対子は役になりませんが、雀頭候補（客風なので、雀頭にしてもピンフは成立します）と、終盤にいつでも通せる安全牌2枚を兼ねるため、先に働きの重なっている${selectedName}を切りました。手が伸びて雀頭が別に決まれば、${name}は後から手放します。`);
+      continue;
+    }
     if (isHonor(tile.kind) && delta >= 0 && delta <= 2) {
       // ドラの字牌を「役にならない字牌」と呼ばない(カルテ30号: ドラの北を誤説明)
       const doraKinds = (view?.public?.doraIndicators ?? []).map(item => doraFromIndicator(item.kind));
