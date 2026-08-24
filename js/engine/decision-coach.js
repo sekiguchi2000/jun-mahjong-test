@@ -660,6 +660,7 @@ function comparisonParts(view, analysis) {
   let honorNarrowerDelta = null;
   let furitenClauseSaid = false;
   let narrowerNoted = false;
+  const terminalEquals = [];
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
     const name = tileName(tile.kind, tile.red);
@@ -689,6 +690,16 @@ function comparisonParts(view, analysis) {
       } else {
         plainHonorEquals.push(name);
       }
+      continue;
+    }
+    // 字牌切り推奨のとき、同格の孤立1・9は「選ばれない理由」ごと言う(カルテ42号:
+    // 役牌には対案文があるのに端牌には無い非対称の解消。2026-08-24ユーザー指摘)
+    if (!isHonor(tile.kind) && selectedTile && isHonor(selectedTile.kind) &&
+        (numOf(tile.kind) === 1 || numOf(tile.kind) === 9) &&
+        delta >= 0 && delta <= 9 &&
+        candidate.metrics?.shanten === selectedMetrics.shanten &&
+        handAllOf(view).filter(item => item.kind === tile.kind).length === 1) {
+      terminalEquals.push({ name, delta });
       continue;
     }
     // 序盤に字牌を残して数牌を切るのが「受け入れの広さ」由来のときは、理由を明示する
@@ -778,6 +789,12 @@ function comparisonParts(view, analysis) {
   }
   if (honorNarrowerNames.length > 0) {
     parts.push(`セオリーどおり${honorNarrowerNames.join('・')}を先に片付ける手もあります。ただ今切ると受け入れが${honorNarrowerDelta}枚狭くなるため、ここでは手の広さを優先して${selectedName}を選びました。字牌は次の巡目以降で整理できます。`);
+  }
+  if (terminalEquals.length > 0) {
+    const names = terminalEquals.map(item => item.name).join('・');
+    const maxDelta = Math.max(...terminalEquals.map(item => item.delta));
+    const deltaText = maxDelta > 0 ? `受け入れが${maxDelta}枚狭くなるのと、` : '';
+    parts.push(`${names}（孤立の端牌）から切る選択もあります。端牌は両面に当たりにくく後で安全牌にも使いやすい牌です。ただ${deltaText}3や7と繋がって両面に育つ芽が字牌より残るため、役にも形にもならない${selectedName}を先にしました。`);
   }
   if (slowerNames.length === 1) {
     parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);
