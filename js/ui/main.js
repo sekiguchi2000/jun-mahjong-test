@@ -10,7 +10,7 @@ import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.j
 import { svgFace } from './tilesvg.js?v=10';
 import { concealedTileCuboid } from './tile-cuboid.js?v=2';
 import { createTabletopPlacement, decorateMeldSlot } from './tabletop-projection.js?v=1';
-import { WebGLTabletopRenderer } from './webgl-tabletop.js?v=4';
+import { WebGLTabletopRenderer } from './webgl-tabletop.js?v=5';
 import { shanten } from '../engine/shanten.js';
 import {
   loadNoCallsPreference, remainingCopies, saveNoCallsPreference,

@@ -87,11 +87,32 @@ function portraitCameraProfile(width, height) {
   const usableHalfWidth = Math.max(1, width / 2 - horizontalMargin);
   const fitRadius = PORTRAIT_GAMEPLAY_RADIUS;
   const fitHeight = 34;
-  const distance = fitRadius * Math.cos(PORTRAIT_ELEVATION) +
+  const horizontalDistance = fitRadius * Math.cos(PORTRAIT_ELEVATION) +
     fitHeight * Math.sin(PORTRAIT_ELEVATION) +
     height * fitRadius / (2 * Math.tan(PORTRAIT_FOV * PI / 360) * usableHalfWidth);
+  // 縦フィット (portrait-fit-v4, 2026-08-25 iPhone13実機報告):
+  // Safariのバー等で実効高が縮むと、水平フィットだけの距離ではカメラが寄りすぎて
+  // 対面の河・山がフレーム上端と上辺HUD帯(プレート+局パネル)の裏に切れる。
+  // 遠端(z=-R, y=牌の高さ)が「上からHUD帯ぶん下がった線」より下に写る距離まで引く。
+  const hudBandPx = 150;
+  const tanHalfFov = Math.tan(PORTRAIT_FOV * PI / 360);
+  const allowedTan = tanHalfFov * Math.max(0.2, 1 - (2 * hudBandPx) / Math.max(height, 1));
+  const sinE = Math.sin(PORTRAIT_ELEVATION);
+  const cosE = Math.cos(PORTRAIT_ELEVATION);
+  let verticalDistance = horizontalDistance;
+  for (let candidate = 200; candidate <= 4000; candidate += 5) {
+    const uy = fitHeight - candidate * sinE;
+    const uz = -fitRadius - candidate * cosE;
+    const along = -(uy * sinE + uz * cosE);        // 視線方向成分
+    const upComponent = uy * cosE - uz * sinE;     // 画面上方向成分
+    if (along > 0 && upComponent / along <= allowedTan) {
+      verticalDistance = candidate;
+      break;
+    }
+  }
+  const distance = Math.max(horizontalDistance, verticalDistance);
   return Object.freeze({
-    id: 'portrait-fit-v3',
+    id: 'portrait-fit-v4',
     fov: PORTRAIT_FOV,
     near: WEBGL_TABLETOP_CONTRACT.camera.near,
     far: WEBGL_TABLETOP_CONTRACT.camera.far,

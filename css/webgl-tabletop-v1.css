@@ -162,7 +162,10 @@
     justify-self: auto;
     inset: auto;
     left: 50%;
-    top: 237px;
+    /* 卓の遠端(対面の河の始まり)は視高Hに対しおよそ0.461H-93pxに写る(カメラ実測2点)。
+     * パネルの下端をその直上に合わせる: top = 遠端 - 高さ58 - 余白。固定237pxは
+     * H=844の設計値で、Safariのバー等でHが縮むと対面の河を覆っていた(iPhone13実機報告) */
+    top: clamp(112px, calc(46.1vh - 151px), 260px);
     width: 106px;
     height: 58px;
     padding: 4px 7px;
@@ -187,4 +190,25 @@
 
 @media (prefers-reduced-motion: reduce) {
   #webgl-tabletop { transition: none; }
+}
+
+@media (orientation: portrait) and (max-height: 719px) {
+  /* Safariのバー等で縦が短い端末: プレート行と卓の間にパネルの居場所が無いため、
+   * 左上の空き地帯(ロゴ下のカーテン域)へコンパクト表示で退避する(iPhone13実機報告) */
+  #board.webgl-tabletop-active #center {
+    left: 8px;
+    transform: none;
+    top: 56px;
+    width: 96px;
+    height: 52px;
+    padding: 3px 6px;
+  }
+  #board.webgl-tabletop-active #center .kyoku { font-size: 13px; }
+  #board.webgl-tabletop-active #center .sub { font-size: 9px; gap: 3px; }
+  #board.webgl-tabletop-active #center .dora-row .tile { width: 13px; height: 18px; }
+}
+
+@media (orientation: portrait) and (max-width: 419px) {
+  /* 390px級では上辺プレートが「あれ?」ボタンに食い込み点数が隠れる。左へ退避 */
+  #board.webgl-tabletop-active .chip.seat-2 { right: 84px; }
 }
