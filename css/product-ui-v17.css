@@ -864,3 +864,9 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
 
 /* デバッグボタン(v98): 通常UIと見分けが付くよう控えめな警告色 */
 .debug-button { border-color: rgba(255, 170, 90, .5); color: #f2b06a; font-size: 13px; }
+
+/* iPad縦(700px以上のportrait): 上辺プレートが中断/あれ?/TURNの列と重ならないよう左へ退避 (v99)。
+   table-physical-v2.cssのportraitルール(right:3%)より後勝ちさせるためidで特異度を上げる */
+@media (min-width: 700px) and (orientation: portrait) {
+  #board .chip.seat-2 { right: 170px; }
+}
