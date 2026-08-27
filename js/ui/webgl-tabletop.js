@@ -842,6 +842,38 @@ export class WebGLTabletopRenderer {
     context.strokeStyle = 'rgba(150,175,210,0.16)';
     context.lineWidth = 1.5;
     context.strokeRect(132, 132, 760, 760);
+    // 自動雀卓のセンター開口 (v101・ユーザー設計/雀魂参照): 卓中央に点棒表示装置が
+    // 収まる凹み。牌を落とせそうな開口線と、四辺の牌スロット線を刻む(質感の仕上げはCodex)
+    const openingHalf = 112;
+    const openingLeft = 512 - openingHalf;
+    const openingSize = openingHalf * 2;
+    context.fillStyle = 'rgba(5, 11, 21, 0.5)';
+    context.beginPath();
+    context.roundRect(openingLeft, openingLeft, openingSize, openingSize, 18);
+    context.fill();
+    context.strokeStyle = 'rgba(214, 178, 106, 0.4)';
+    context.lineWidth = 3;
+    context.beginPath();
+    context.roundRect(openingLeft, openingLeft, openingSize, openingSize, 18);
+    context.stroke();
+    context.strokeStyle = 'rgba(120, 150, 190, 0.3)';
+    context.lineWidth = 1.5;
+    context.beginPath();
+    context.roundRect(openingLeft + 8, openingLeft + 8, openingSize - 16, openingSize - 16, 14);
+    context.stroke();
+    // 四辺の牌スロット線(山がせり上がる位置の目地)
+    context.strokeStyle = 'rgba(140, 165, 200, 0.22)';
+    context.lineWidth = 2;
+    for (const offset of [-296, 296]) {
+      context.beginPath();
+      context.moveTo(512 - 300, 512 + offset);
+      context.lineTo(512 + 300, 512 + offset);
+      context.stroke();
+      context.beginPath();
+      context.moveTo(512 + offset, 512 - 300);
+      context.lineTo(512 + offset, 512 + 300);
+      context.stroke();
+    }
     const texture = this._track(new THREE.CanvasTexture(canvas));
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;

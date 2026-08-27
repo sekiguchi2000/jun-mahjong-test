@@ -1931,15 +1931,37 @@ class UI {
     if (this.spectate) { this.myHand = this.game.handOf(0); this.myDrawn = null; this.renderHand(); }
     this.renderWebGLTabletop(state);
 
-    // 中央
+    // 中央: 自動卓のセンター盤(2026-08-27ユーザー設計、雀魂参照)。
+    // 四辺に各家の風+点棒(横画面では各家の向きへ回転)、中心に場風・局・本場・供託・残ツモ。
+    // 親は風の強調、手番は辺の発光で示す(色付けの仕上げはCodex)
+    const seatCells = [0, 1, 2, 3].map(p => {
+      const wind = WIND_NAMES[(p - state.dealer + 4) % 4];
+      const classes = ['center-seat', `pos-${p}`];
+      if (state.turn === p) classes.push('active');
+      if (p === state.dealer) classes.push('dealer');
+      if (state.players[p].riichi) classes.push('riichi');
+      return `<div class="${classes.join(' ')}"><span class="cwind">${wind}</span>` +
+        `<span class="cpts">${state.points[p]}</span></div>`;
+    }).join('');
     $('#center').innerHTML =
+      `<div class="center-device">${seatCells}` +
+      `<div class="center-core">` +
       `<div class="kyoku">${WIND_NAMES[state.roundWindIdx]}${state.kyoku + 1}局</div>` +
       `<div class="sub"><span class="rest">残 ${state.remaining}</span>` +
       `<span>${state.honba}本場</span>` +
       `<span class="sticks">供託 ${state.riichiSticks}本</span></div>` +
-      `<div class="dora-row"><span class="label">ドラ</span></div>`;
-    const doraRow = $('#center .dora-row');
-    for (const t of state.doraIndicators) doraRow.appendChild(tileEl(t));
+      `</div></div>`;
+    // ドラ表示HUD: 「ドラ」でなく「ドラ表示(牌)」であることを明示し、実物の表示牌+
+    // めくれ枚数(カンドラ)を左上に置く。実ドラが何かも小さく添えて初心者の迷いを断つ
+    const doraHud = $('#dora-hud');
+    if (doraHud) {
+      const actualDora = [...new Set(state.doraIndicators.map(t => tileName(doraFromIndicator(t.kind))))];
+      doraHud.innerHTML = `<span class="label">ドラ表示</span><div class="tiles"></div>` +
+        `<span class="derived">ドラ: ${actualDora.join('・')}</span>`;
+      const tilesBox = doraHud.querySelector('.tiles');
+      for (const t of state.doraIndicators) tilesBox.appendChild(tileEl(t, { mini: true }));
+      doraHud.setAttribute('aria-label', `ドラ表示牌。実際のドラは${actualDora.join('と')}`);
+    }
     if (state.riichiSticks > 0) {
       const pot = document.createElement('div');
       pot.className = 'riichi-pot';

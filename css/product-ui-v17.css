@@ -870,3 +870,51 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
 @media (min-width: 700px) and (orientation: portrait) {
   #board .chip.seat-2 { right: 170px; }
 }
+
+/* ============ 自動卓センター盤 (v101・雀魂参照のユーザー設計) ============ */
+#center .center-device { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+#center .center-core { text-align: center; }
+/* 四辺の風+点棒。狭い画面では出さない(席札が同情報を持つ)。広い横画面で展開 */
+#center .center-seat { display: none; position: absolute; gap: 5px; align-items: center; white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 12px; color: #cfe0f0; }
+#center .center-seat .cwind { font-weight: 700; font-size: 12px; color: #8fa8c0; }
+#center .center-seat.dealer .cwind { color: #ffce6e; }
+#center .center-seat.active { color: #ffffff; text-shadow: 0 0 8px rgba(120, 190, 255, .8); }
+#center .center-seat.riichi .cpts { color: #8fd0ff; }
+#center .center-seat .cpts { font-weight: 600; }
+
+@media (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  /* 広い横画面: センター盤を自動卓の開口サイズへ拡張し、四辺に点棒を回転配置 */
+  #board.webgl-tabletop-active #center { width: 134px; height: 134px; border-radius: 14px; }
+  #board.webgl-tabletop-active #center .center-core { max-width: 88px; }
+  #board.webgl-tabletop-active #center .center-core .kyoku { font-size: 15px; }
+  #board.webgl-tabletop-active #center .center-core .sub { flex-wrap: wrap; justify-content: center; gap: 2px 5px; font-size: 9px; line-height: 1.3; }
+  #board.webgl-tabletop-active #center .center-seat { display: flex; }
+  #board.webgl-tabletop-active #center .center-seat.pos-0 { bottom: 4px; left: 50%; transform: translateX(-50%); }
+  #board.webgl-tabletop-active #center .center-seat.pos-2 { top: 4px; left: 50%; transform: translateX(-50%) rotate(180deg); }
+  #board.webgl-tabletop-active #center .center-seat.pos-1 { top: 50%; right: -24px; transform: translateY(-50%) rotate(-90deg); }
+  #board.webgl-tabletop-active #center .center-seat.pos-3 { top: 50%; left: -24px; transform: translateY(-50%) rotate(90deg); }
+}
+
+/* ドラ表示HUD: 表示牌(めくれ牌)であることを名乗る。左上定位置 */
+#dora-hud {
+  position: absolute; z-index: 30; left: 12px; top: 188px;
+  display: none; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 6px 9px; border-radius: 9px;
+  background: rgba(10, 16, 26, .72); border: 1px solid rgba(214, 178, 106, .35);
+}
+#screen-game:not(.hidden) #dora-hud { display: flex; }
+#dora-hud .label { font-size: 10px; letter-spacing: .08em; color: #d9c48a; }
+#dora-hud .tiles { display: flex; gap: 2px; }
+#dora-hud .derived { font-size: 10px; color: rgba(255, 255, 255, .75); }
+@media (orientation: landscape) and (max-height: 480px) {
+  #dora-hud { top: 108px; left: 8px; padding: 4px 6px; }
+  #dora-hud .derived { display: none; }
+}
+@media (orientation: portrait) {
+  #dora-hud { left: 8px; top: clamp(112px, calc(46.1vh - 151px), 260px); }
+}
+@media (orientation: portrait) and (max-height: 719px) {
+  /* 短い縦: 右上帯(あれ?の下)に横並びミニ表示。左上は局パネルが使う */
+  #dora-hud { left: auto; right: 8px; top: 103px; flex-direction: row; align-items: center; gap: 5px; padding: 3px 7px; }
+  #dora-hud .derived { display: none; }
+}
