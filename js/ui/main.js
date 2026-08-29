@@ -10,7 +10,7 @@ import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.j
 import { svgFace } from './tilesvg.js?v=10';
 import { concealedTileCuboid } from './tile-cuboid.js?v=2';
 import { createTabletopPlacement, decorateMeldSlot } from './tabletop-projection.js?v=1';
-import { WebGLTabletopRenderer } from './webgl-tabletop.js?v=5';
+import { WebGLTabletopRenderer } from './webgl-tabletop.js?v=6';
 import { shanten } from '../engine/shanten.js';
 import {
   loadNoCallsPreference, remainingCopies, saveNoCallsPreference,
@@ -1913,11 +1913,26 @@ class UI {
 
   renderWebGLTabletop(state) {
     if (!state || !this.webglTabletop) return;
+    // v102: 局・点棒情報は卓中央の3D装置画面(卓の実体)へ焼き込む。DOM #centerは縦画面専用に。
+    const centerInfo = {
+      round: `${WIND_NAMES[state.roundWindIdx]}${state.kyoku + 1}局`,
+      remaining: state.remaining,
+      honba: state.honba,
+      sticks: state.riichiSticks,
+      seats: [0, 1, 2, 3].map(p => ({
+        wind: WIND_NAMES[(p - state.dealer + 4) % 4],
+        points: state.points[p],
+        active: state.turn === p,
+        dealer: p === state.dealer,
+        riichi: state.players[p].riichi === true,
+      })),
+    };
     const result = this.webglTabletop.render(state, {
       lastDiscard: this.lastDiscardRef,
       lastDiscardPlayer: this.lastDiscardPlayer,
       drawnSeat: this.tabletopDrawnSeat,
       kakanPreview: this.tabletopKakanPreview,
+      centerInfo,
     });
     if (result?.catch) result.catch(error => {
       console.error('The WebGL tabletop frame could not be rendered.', error);

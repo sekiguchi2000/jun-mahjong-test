@@ -212,3 +212,9 @@
   /* 390px級では上辺プレートが「あれ?」ボタンに食い込み点数が隠れる。左へ退避 */
   #board.webgl-tabletop-active .chip.seat-2 { right: 84px; }
 }
+
+@media (orientation: landscape) {
+  /* v102: 局・点棒はThree.jsシーン内の点棒表示装置(卓の実体)へ焼き込むため、
+     横画面ではDOMオーバーレイの#centerを出さない。縦画面は読めるHUDとして継続 */
+  #board.webgl-tabletop-active #center { display: none; }
+}

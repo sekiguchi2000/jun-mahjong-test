@@ -661,6 +661,7 @@ export class WebGLTabletopRenderer {
     this.lastOptions = options && typeof options === 'object' ? options : {};
     this.lastLayout = layoutWebGLTabletop(this.lastState, this.lastOptions);
     if (!this.ready || this.disposed || this.contextLost || !this.scene) return this.lastLayout;
+    this._updateCenterScreen(this.lastOptions.centerInfo ?? this.lastCenterInfo ?? null);
 
     const focus = this.focusTargetSpec;
     this._detachFocusEffect();
@@ -813,6 +814,124 @@ export class WebGLTabletopRenderer {
       this.scene.add(rim);
     }
 
+    this._buildCenterDevice();
+  }
+
+  // v102: 点棒表示装置をDOMオーバーレイでなく卓の実体として描く(雀魂参照・ユーザー要望)。
+  // フェルトテクスチャの開口(±112/1024)にぴったり収まる黒筐体+金縁+発光ガラス画面。
+  _buildCenterDevice() {
+    const { table } = WEBGL_TABLETOP_CONTRACT;
+    const feltSpan = table.feltSize + table.rimWidth;
+    const openingWorld = (224 / 1024) * feltSpan;
+    const deviceSize = openingWorld - 8;
+
+    const housingMaterial = this._track(new THREE.MeshPhysicalMaterial({
+      color: 0x0c1119, roughness: 0.34, metalness: 0.55, clearcoat: 0.6, clearcoatRoughness: 0.3,
+    }));
+    const housing = new THREE.Mesh(
+      this._track(new RoundedBoxGeometry(deviceSize, 16, deviceSize, 3, 5)),
+      housingMaterial,
+    );
+    housing.position.y = -1.5;
+    housing.castShadow = true;
+    housing.receiveShadow = true;
+    this.scene.add(housing);
+
+    const trimMaterial = this._track(new THREE.MeshStandardMaterial({
+      color: 0x8a6f3a, roughness: 0.3, metalness: 0.85,
+    }));
+    const trim = new THREE.Mesh(
+      this._track(new RoundedBoxGeometry(deviceSize - 4, 2.6, deviceSize - 4, 2, 3)),
+      trimMaterial,
+    );
+    trim.position.y = 6.6;
+    this.scene.add(trim);
+
+    this.centerCanvas = document.createElement('canvas');
+    this.centerCanvas.width = this.centerCanvas.height = 1024;
+    this.centerTexture = this._track(new THREE.CanvasTexture(this.centerCanvas));
+    this.centerTexture.colorSpace = THREE.SRGBColorSpace;
+    this.centerTexture.anisotropy = 8;
+    // 画面は無灯り(MeshBasic)=LCDの自発光。牌より僅かに沈む段差で「装置に嵌まった画面」に。
+    const screenMaterial = this._track(new THREE.MeshBasicMaterial({ map: this.centerTexture }));
+    const screen = new THREE.Mesh(
+      this._track(new THREE.PlaneGeometry(deviceSize - 18, deviceSize - 18)),
+      screenMaterial,
+    );
+    screen.rotation.x = -HALF_PI;
+    screen.position.y = 8.1;
+    this.scene.add(screen);
+    this._drawCenterScreen(this.lastCenterInfo ?? null);
+  }
+
+  _updateCenterScreen(info) {
+    this.lastCenterInfo = info && typeof info === 'object' ? info : null;
+    if (!this.centerCanvas || !this.centerTexture) return;
+    this._drawCenterScreen(this.lastCenterInfo);
+    this.centerTexture.needsUpdate = true;
+  }
+
+  _drawCenterScreen(info) {
+    const context = this.centerCanvas?.getContext?.('2d');
+    if (!context) return;
+    const size = 512;
+    context.setTransform(2, 0, 0, 2, 0, 0); // 実キャンバス1024を512座標系で描く(高精細化)
+    const gradient = context.createRadialGradient(256, 256, 40, 256, 256, 340);
+    gradient.addColorStop(0, '#101a2c');
+    gradient.addColorStop(1, '#05080f');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, size, size);
+    context.strokeStyle = 'rgba(120, 150, 190, 0.18)';
+    context.lineWidth = 2;
+    context.strokeRect(10, 10, size - 20, size - 20);
+
+    const seats = Array.isArray(info?.seats) ? info.seats : null;
+    // 四辺の各家読み出し: seat0=手前(回転なし)/1=右/2=対面/3=左。文字は各家の方を向く。
+    for (let seat = 0; seat < 4; seat += 1) {
+      const cell = seats?.[seat] ?? null;
+      context.save();
+      context.translate(256, 256);
+      context.rotate(-seat * HALF_PI);
+      context.translate(0, 196);
+      if (cell?.active) {
+        context.fillStyle = 'rgba(214, 178, 106, 0.9)';
+        context.fillRect(-150, 42, 300, 8);
+        context.shadowColor = 'rgba(214, 178, 106, 0.8)';
+        context.shadowBlur = 18;
+        context.fillRect(-150, 42, 300, 8);
+        context.shadowBlur = 0;
+      }
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const windColor = cell?.dealer ? '#e0524d' : '#d6b26a';
+      context.fillStyle = windColor;
+      context.font = '700 44px "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
+      context.fillText(cell?.wind ?? '', -104, 0);
+      context.fillStyle = cell?.active ? '#ffffff' : '#c9d4e6';
+      context.font = '700 52px "Segoe UI", "Yu Gothic", sans-serif';
+      context.fillText(cell ? String(cell.points) : '', 34, 0);
+      if (cell?.riichi) {
+        context.fillStyle = '#f0e5cb';
+        context.fillRect(-64, -44, 128, 12);
+        context.fillStyle = '#b92c28';
+        context.beginPath();
+        context.arc(0, -38, 4.5, 0, Math.PI * 2);
+        context.fill();
+      }
+      context.restore();
+    }
+
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = '#f3ecd8';
+    context.font = '700 72px "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif';
+    context.fillText(info?.round ?? '−−', 256, 218);
+    context.fillStyle = '#9db4d8';
+    context.font = '600 34px "Segoe UI", "Yu Gothic", sans-serif';
+    context.fillText(info ? `残 ${info.remaining}　${info.honba}本場` : '', 256, 282);
+    context.fillStyle = info?.sticks > 0 ? '#d6b26a' : '#5d6b82';
+    context.font = '600 32px "Segoe UI", "Yu Gothic", sans-serif';
+    context.fillText(info ? `供託 ${info.sticks}本` : '', 256, 330);
   }
 
   _makeFeltTexture() {
