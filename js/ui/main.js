@@ -504,6 +504,15 @@ class UI {
       }
       const note = $('#coach-mode-lock-note');
       if (note) note.classList.toggle('hidden', !locked);
+      // 中断メニュー側にも解禁条件を明示する(ロック中は押せない理由が見えず
+      // 「チェックできない」と混乱するため。2026-08-31ユーザー報告)
+      const pauseNote = $('#pause-coach-note');
+      if (pauseNote) {
+        const firstUnlock = Math.min(...GUIDE_STYLES.map(style => guideUnlockLevel(style.profile)));
+        pauseNote.textContent = locked
+          ? `Lv${firstUnlock}で解禁（対局に勝ってLvを上げよう）`
+          : 'あなたの手番で候補と理由を表示';
+      }
     };
     this.syncLearningModeControls = sync;
     const commit = changes => {
