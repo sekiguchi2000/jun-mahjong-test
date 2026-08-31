@@ -157,12 +157,23 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     if (counts[kind] >= 3) ankoKinds.push(kind);
   }
   const tripletPower = ponMelds + ankoKinds.length;
-  if ((ponMelds >= 1 && ponMelds + pairKinds.length >= 4) ||
-      (ankoKinds.length >= 2 && pairKinds.length >= 4)) {
+  // 完成順子・チーがある手はトイトイに向かえない(カルテ18号の掟をプラン層にも適用。
+  // 自走triage 2026-08-31: 456m入りの手で「本線はトイトイ」と言った)
+  const chiExists = melds.some(meld => meld?.type === 'chi');
+  // runCountはターツ含みの数なので使わず、完成順子ブロックだけを数える
+  const toitoiRunCount = decomposeBlocks(handAll, context).blocks
+    .filter(block => block.type === 'run' && block.kinds.length === 3).length;
+  // 完成順子は重み半減/個(本線には立てない=カルテ48A「456m持ちで本線トイトイ」の修正。
+  // ただし完全排除はしない: 順子を壊してトイトイへ乗る道は「見える二番手」として残り、
+  // カルテ31号bの乗り換え宣言が機能する)。チーは論外(トイトイ不可能)
+  const toitoiRunDamp = Math.max(0, 1 - 0.5 * toitoiRunCount);
+  if (!chiExists && toitoiRunDamp > 0 &&
+      ((ponMelds >= 1 && ponMelds + pairKinds.length >= 4) ||
+      (ankoKinds.length >= 2 && pairKinds.length >= 4))) {
     plans.push({
       code: 'TOITOI',
       pairKinds,
-      weight: Math.min(1, 0.35 + 0.2 * Math.max(0, tripletPower - 1) + 0.15 * Math.max(0, pairKinds.length - 3)),
+      weight: Math.min(1, 0.35 + 0.2 * Math.max(0, tripletPower - 1) + 0.15 * Math.max(0, pairKinds.length - 3)) * toitoiRunDamp,
       value: 1.5,
       notes: [],
     });

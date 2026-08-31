@@ -584,6 +584,10 @@ function planHeadlineSentences(selected, view) {
       sentences.push('この手はもう役を付けにくい形です。ここからは流局時のテンパイ料を目標に、形のテンパイへ向かいます。');
     } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
       sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
+    } else if (top.code === 'HONITSU' && (top.weight ?? 0) < 0.8) {
+      // 移行期の染め(材料10枚前後)は断言しない(自走triage 2026-08-31: 「本線は
+      // ホンイツです」と言いながら色外ターツを「伸ばしたい形」に並べる矛盾)
+      sentences.push('まだ本線を一本に決めない牌姿です。手なりとホンイツの両にらみで進めます。');
     } else {
       sentences.push(`今の本線は${planLabelFor(top.code, view)}です。`);
     }
@@ -895,12 +899,12 @@ function turnExplanationParts(view, analysis) {
       const hold = riichiInfo.hold ?? {};
       const growth = [];
       if ((hold.tanyaoKinds?.length ?? 0) > 0) {
-        growth.push(`${hold.tanyaoKinds.map(kind => tileName(kind)).join('・')}を引けばタンヤオが付いてダマでもあがれる形になり`);
+        growth.push(`${hold.tanyaoKinds.map(kind => tileName(kind)).join('・')}を引けばタンヤオが付いてダマでもあがれる形になります`);
       }
       if ((hold.widenKinds?.length ?? 0) > 0) {
         growth.push(`${hold.widenKinds.map(kind => tileName(kind)).join('・')}で待ちが広い形に育ちます`);
       }
-      let sentence = `テンパイですが、リーチはまだ打ちません。今の待ちは残り${riichiInfo.physicalRemaining}枚と薄く、${growth.length > 0 ? growth.join('、') + '。' : ''}`;
+      let sentence = `テンパイですが、リーチはまだ打ちません。今の待ちは残り${riichiInfo.physicalRemaining}枚と薄く、${growth.length > 0 ? growth.join('。また、') + '。' : ''}`;
       if (hold.pressure) {
         sentence += 'テンパイの気配がある相手もいて、リーチで手を固定すると降りられなくなります。';
       }
@@ -910,12 +914,26 @@ function turnExplanationParts(view, analysis) {
     const honor = selectedHonorContext(view, action);
     const selectedPlanNotes = selected?.metrics?.planEvaluation?.notes ?? [];
     if (honor && honor.value && honor.copies === 1 && selectedPlanNotes.includes('LONE_YAKUHAI_EARLY_CUT')) {
+      // 自走triage 2026-08-31: 「タンヤオ・ピンフ系」固定文がピンフ系/手なりの手でも
+      // 出ていた(定型文病)。実プランのラベルで言い、「序盤のうちに」も巡目で言い分ける
       const topPlan = selected?.metrics?.planEvaluation?.topPlans?.[0];
-      const strongTanyao = topPlan?.code === 'TANYAO_PINFU' &&
+      const strongPlan = topPlan && PLAN_LABELS[topPlan.code] &&
         (topPlan.weight ?? 0) * (topPlan.value ?? 0) >= 0.45;
-      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、${strongTanyao ? 'タンヤオ・ピンフ系で3900点以上を狙う方が本線なので' : '手なりでテンパイへ進む方が価値が高いので'}、序盤のうちに切ります。`);
+      const planLabelText = strongPlan ? planLabelFor(topPlan.code, view) : '';
+      const planPhrase = strongPlan && !planLabelText.startsWith('手なり')
+        ? `${planLabelText}を狙う方が本線なので`
+        : '手なりでテンパイへ進む方が価値が高いので';
+      const timing = (view?.public?.remaining ?? 0) >= 45 ? '序盤のうちに切ります' : 'ここで手放します';
+      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}ですが1枚だけです。重なりを待って安手を拾うより、${planPhrase}、${timing}。`);
     } else if (honor && !honor.value && honor.copies === 1) {
-      sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
+      // 自走triage 2026-08-31: 強ホンイツ本線の手で「数牌のつながりを残すため」は矛盾
+      // (字牌はホンイツ材料)。染め本線では「材料の中で最も軽い1枚の整理」と言う
+      const topPlanForHonor = selected?.metrics?.planEvaluation?.topPlans?.[0];
+      if (topPlanForHonor?.code === 'HONITSU' && (topPlanForHonor.weight ?? 0) >= 0.8) {
+        sentences.push(`${tileName(honor.tile.kind)}はホンイツの材料ではありますが、1枚だけで役にもならず、重なりの見込みも薄い牌です。材料の中で最も軽いこの牌から整理します。`);
+      } else {
+        sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
+      }
     } else if (honor && honor.value && honor.copies === 1) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}なので、もう1枚重なれば役になります。ただし、今の手を進めるほうが有利なら、その可能性を手放して切ることもあります。`);
     }
