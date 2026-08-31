@@ -23,43 +23,43 @@ export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 
 export const AI_STYLES = Object.freeze({
   // cautionWeight: リーチ未満の「テンパイ気配」への警戒の強さ(キャラ差は重みだけ)
-  guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3, riichiHoldPolicy: 'cautious' }),
-  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced' }),
-  striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7, riichiHoldPolicy: 'upgrade' }),
+  guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3, riichiHoldPolicy: 'cautious', callDepth: 1, menzenFirst: true }),
+  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true }),
+  striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7, riichiHoldPolicy: 'upgrade', callDepth: 3, menzenFirst: false }),
   // ガイドの思考モード(2026-08-19ユーザー設計、v14):
   //  攻め=高めを狙い多少のリスクは冒す / バランス=analyst相当 /
   //  守り=リスク完全回避(回す・無理なら降りる) / 効率=リスク無視の最速あがり
-  attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3, riichiHoldPolicy: 'upgrade' }),
-  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced' }),
-  defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8, riichiHoldPolicy: 'cautious' }),
+  attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3, riichiHoldPolicy: 'upgrade', callDepth: 3, menzenFirst: false }),
+  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true }),
+  defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8, riichiHoldPolicy: 'cautious', callDepth: 1, menzenFirst: true }),
   efficiency: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
-    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', earlyHonorSweep: false,
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', earlyHonorSweep: false, callDepth: 3, menzenFirst: false,
   }),
   // スピリチュアル(遊び枠): 挙動はバランス相当+対子場チートイ固定+南場のツキ吸い取り鳴き。
   // ツキ状態(あがり/放銃後)はUI側がspiritualHotへ切り替える
   spiritual: Object.freeze({
     foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
-    riichiHoldPolicy: 'balanced', spiritualRules: true,
+    riichiHoldPolicy: 'balanced', spiritualRules: true, callDepth: 2, menzenFirst: true,
   }),
   spiritualHot: Object.freeze({
     foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6,
-    planWeight: 1.3, riichiHoldPolicy: 'upgrade', spiritualRules: true,
+    planWeight: 1.3, riichiHoldPolicy: 'upgrade', spiritualRules: true, callDepth: 3, menzenFirst: false,
   }),
   // COMキャラ用 (2026-08-20): ダイスケ=脇目もふらぬ最速+必ずカン
   daisuke: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
-    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', kanEager: true, earlyHonorSweep: false,
+    cautionWeight: 0, ignoreRisk: true, riichiHoldPolicy: 'never', kanEager: true, earlyHonorSweep: false, callDepth: 3, menzenFirst: false,
   }),
   // 陳=絶対リーチしないダマ職人。テンパイからでも降りる。内側から捨てる癖
   chen: Object.freeze({
     foldAt: 0, riichiLiveMin: 99, ponPairMin: 4, cautionWeight: 1.8,
-    riichiHoldPolicy: 'never', neverRiichi: true, planWeight: 0.6, innerFirstDrop: true,
+    riichiHoldPolicy: 'never', neverRiichi: true, planWeight: 0.6, innerFirstDrop: true, callDepth: 1, menzenFirst: true,
   }),
   // サワカ=手役ロマン派(国士/大三元/ホンイツ即断/四暗刻ロン拒否)。南場沈みで攻め化
   sawaka: Object.freeze({
     foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
-    riichiHoldPolicy: 'balanced', specialPlans: true, suuankouGreed: true, southRankAttack: true,
+    riichiHoldPolicy: 'balanced', specialPlans: true, suuankouGreed: true, southRankAttack: true, callDepth: 2, menzenFirst: true,
   }),
 });
 
@@ -1844,6 +1844,7 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
   // ただし鳴いた先のテンパイの待ちがほぼ死んでいる(生き1枚以下)なら取らない。
   // どの当ても無い「速度だけの鳴き」は従来どおりスルー(理由は明言する)
   let deadWaitInfo = null;
+  let menzenKeepInfo = null;
   const visibleForClaim = visibleCounts(view);
   const bestTenpaiWaits = tilesOut => {
     const after = counts.slice();
@@ -1906,8 +1907,14 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
       const afterBest = bestAfterClaim(claimTiles);
       if (afterBest === null || afterBest >= shantenNow) continue;
       const claimedAllSimple = simpleKind(offer.tile.kind) && claimTiles.every(simpleKind);
-      const tanyaoCall = claimedAllSimple && meldsAllSimple && handNonSimple <= 1 && shantenNow <= 3;
-      const backedCall = backedKind !== null && shantenNow <= 2;
+      // 鳴きの深さは思考別 (カルテ47号 2026-08-31 ユーザー指摘「序盤からテンパイも
+      // 遠いのに全思考が鳴く。俺ならこんなところで鳴かない」): 速度鳴きに個性を入れる。
+      // 攻め/効率=3向聴まで、バランス=2向聴まで、守り/陳=1向聴のみ。
+      const callDepth = style.callDepth ?? 2;
+      const tanyaoCall = claimedAllSimple && meldsAllSimple && handNonSimple <= 1 &&
+        shantenNow <= Math.min(3, callDepth);
+      const backedCall = backedKind !== null && shantenNow <= Math.min(2, callDepth);
+      // 確定ホンイツ(手+副露が既に一色+字牌)は価値筋なので深めでも許す
       const honitsuCall = flushCall && shantenNow <= 3;
       // 形式テンパイ切替 (2026-08-20ユーザー裁定①): 2副露以上で役の道が細い手は、
       // テンパイ料を目標に、向聴の進む鳴きを解禁する
@@ -1915,6 +1922,14 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
         !flushCall && backedKind === null &&
         (!meldsAllSimple || handNonSimple >= 2);
       if (!tanyaoCall && !backedCall && !honitsuCall && !formalCall) continue;
+      // 門前尊重 (カルテ47号): 門前のまま序盤(残45枚以上)なら、リーチ・裏・一発の
+      // 価値が丸ごと残っている。menzenFirstの思考はタンヤオ/役牌バックの速度鳴きを
+      // 見送り、門前で進める(確定ホンイツ・役牌ポン・トイトイ・形式テンパイは対象外)
+      if (style.menzenFirst === true && claimMeldCount === 0 &&
+          Number.isFinite(liveRemaining) && liveRemaining >= 45 && !honitsuCall) {
+        menzenKeepInfo = { shantenNow, claimShanten: afterBest };
+        continue;
+      }
       // 死にテンパイ判定 (カルテ29号): 鳴けばテンパイでも待ちが残り1枚以下なら
       // 手を固定せずスルーし、その事実を理由として持ち帰る
       if (afterBest === 0) {
@@ -1956,7 +1971,9 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
     pass.metrics = {
       ...pass.metrics, shantenBefore: shantenNow, bestClaimShanten,
       ...(deadWaitInfo ? { deadWait: deadWaitInfo } : {}),
+      ...(menzenKeepInfo ? { menzenKeep: menzenKeepInfo } : {}),
     };
+    if (menzenKeepInfo) pass.reasons = ['MENZEN_KEEP'];
   }
 
   // スピリチュアル(遊び): 南場で自分が3位/4位のとき、1位/2位の捨て牌は

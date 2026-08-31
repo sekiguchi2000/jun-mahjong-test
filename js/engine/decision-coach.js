@@ -1094,6 +1094,14 @@ function claimExplanationParts(view, offer, analysis) {
         'ほぼあがれない形に手を固定するより、スルーして手の変化を待ちます。',
       ];
     }
+    // 門前尊重 (カルテ47号): 役の当てはあるが、序盤の門前は鳴かずリーチの道を残す
+    if (passMetrics.menzenKeep) {
+      const keep = passMetrics.menzenKeep;
+      return [
+        `スルー（鳴かない）を勧めます。${claimedName}を鳴けば${shantenLabel(keep.shantenNow)}から${shantenLabel(keep.claimShanten)}へ速くなるのは見えています。`,
+        'ただ、まだ序盤で手は門前のまま。ここで鳴くとリーチ・一発・裏ドラの道が丸ごと消え、安くて守りにくい手になります。自分のツモで進めて、リーチできる形を目指します。',
+      ];
+    }
     const improves = Number.isInteger(passMetrics.bestClaimShanten) &&
       Number.isInteger(passMetrics.shantenBefore) &&
       passMetrics.bestClaimShanten < passMetrics.shantenBefore;
