@@ -756,7 +756,9 @@ function discardCandidate({
   let planEvaluation = null;
   if (context.plans) {
     planEvaluation = tileRetentionValue(tile, context.plans, handAll, context.planContext);
-    if (planEvaluation.retention > 0) {
+    // 負の残留価値=「払うこと自体がプランを進める」(強ホンイツの色外し・カルテ44号)。
+    // 切り推奨ボーナスとして同じ式で合流させる
+    if (planEvaluation.retention !== 0) {
       // テンパイへ入る打牌では待ち質(受け入れ実枚数)を優先し、プラン価値は0.4倍に減衰。
       // 「効率が少し落ちても高め」は許すが、生き待ち3枚→1枚のような大損は許さない。
       const tenpaiAttenuation = afterShanten === 0 ? 0.3 : 1;

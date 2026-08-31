@@ -359,6 +359,14 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
 
   let retention = best + second * 0.35;
 
+  // 強ホンイツの色外し (カルテ44号 2026-08-31): flushSize12枚相当(weight≥0.8)まで
+  // 染まった手では、色外の数牌は「骨」ではなく退去予定者。骨組み保護を与えず、
+  // 払うこと自体がプランを進める(負の残留価値=切り推奨)。北北北・中中中(ドラ3)に
+  // 2344m79m+46sで、受け入れ3枚差を理由に4mを切って46sを残した実戦バグ。
+  const strongFlushPlan = plans.find(plan => plan.code === 'HONITSU' && plan.weight >= 0.8);
+  const offFlushSuit = strongFlushPlan !== undefined && !isHonor(kind) &&
+    suitIndex(kind) !== strongFlushPlan.suit;
+
   // ブロック骨組みボーナス (v12.1): 選ばれた5ブロックの構成牌は「手の骨」。
   // 受け入れ枚数の揺れで両面ターツ等が壊されるのを防ぐ。
   const { chosen } = decomposeBlocks(handAll, context);
@@ -371,7 +379,7 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
   for (const block of chosen) {
     if (!spareCopy && block.kinds.includes(kind)) blockQuality = Math.max(blockQuality, block.quality);
   }
-  if (blockQuality > 0) {
+  if (blockQuality > 0 && !offFlushSuit) {
     // 完成した面子(暗刻・順子)の構成牌は原則不可侵。ターツ・雀頭はやや弱い保護
     const completeSet = chosen.some(block =>
       (block.type === 'set' || block.type === 'run') && block.kinds.includes(kind));
@@ -420,6 +428,13 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
         notes.add('LONE_YAKUHAI_EARLY_CUT');
       }
     }
+  }
+
+  // 強ホンイツの色外し(続き): 色外牌は残留価値を打ち消し、払う側へ倒す。
+  // 赤5だけは確定1翻として例外(後段のRED_TILEが優先して守る)
+  if (offFlushSuit && !tile.red) {
+    retention = Math.min(retention, 0) - 0.6 * strongFlushPlan.weight * strongFlushPlan.value;
+    notes.add('OFF_FLUSH_SHED');
   }
 
   // 赤牌そのものは常に高価値(確定1翻)。形の価値に上乗せし、受け入れ数枚差で手放さない
