@@ -64,9 +64,10 @@ function actionLabel(action, view, offer = null) {
   if (action.action === 'tsumo') return 'ツモあがり';
   if (action.action === 'ron') return 'ロンあがり';
   if (action.action === 'discard') {
+    // 赤5は「赤5筒」と正確に呼ぶ(自走リントD5: 実選択の表記と食い違っていた)
     const tile = tileAt(view, action.index);
-    if (action.riichi) return `${tile ? tileName(tile.kind) : 'この牌'}を切ってリーチ`;
-    return `${tile ? tileName(tile.kind) : 'この牌'}を切る`;
+    if (action.riichi) return `${tile ? tileName(tile.kind, tile.red) : 'この牌'}を切ってリーチ`;
+    return `${tile ? tileName(tile.kind, tile.red) : 'この牌'}を切る`;
   }
   if (action.action === 'ankan') return `${Number.isInteger(action.kind) ? tileName(action.kind) : 'この牌'}を暗カン`;
   if (action.action === 'pon') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をポン`;

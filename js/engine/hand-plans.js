@@ -430,6 +430,15 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
     }
   }
 
+  // ドラ対子の温存 (カルテ46号 2026-08-31 自走スイープ検出): 対子以上のドラは
+  // 雀頭・刻子候補として2翻級の柱。ブロック骨組み選抜は形品質しか見ないため、
+  // 端のドラ対子(99s)が中張の無価値対子(66s)より先に選抜から溢れて崩される
+  // 実戦バグ。枚数ぶんの価値を残留へ上乗せし、同向聴なら無価値側から払わせる。
+  if (context.doraKinds?.includes(kind) && counts[kind] >= 2) {
+    retention += 0.5 * counts[kind];
+    notes.add('DORA_PAIR_KEEP');
+  }
+
   // 強ホンイツの色外し(続き): 色外牌は残留価値を打ち消し、払う側へ倒す。
   // 赤5だけは確定1翻として例外(後段のRED_TILEが優先して守る)
   if (offFlushSuit && !tile.red) {
