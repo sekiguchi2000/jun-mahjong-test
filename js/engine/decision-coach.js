@@ -992,6 +992,14 @@ function turnExplanationParts(view, analysis) {
           ? '守り思考の真骨頂です。'
           : '';
       sentences.push(`${Math.round((leadFact?.lead ?? 0) / 100) * 100}点の大きなリードがあり、この安い手で押しても得るものがありません。${styleVoice}テンパイを捨ててでも安全第一で、この局は流しにいきます。`);
+    } else if (factors.has('CHEAP_TENPAI_FOLD')) {
+      // カルテ51号: 安手テンパイはテンパイでも降りる(ユーザー裁定「親リーチに南のみで
+      // 突っ張るのは守りではない」)。見返りと想定失点を数字で対比して言う
+      const foldFact = (analysis?.decisiveFactors ?? []).find(factor => factor.code === 'CHEAP_TENPAI_FOLD');
+      const gain = (foldFact?.value ?? 0) + (foldFact?.pot ?? 0);
+      const loss = foldFact?.expectedLoss;
+      const styleVoice = analysis?.profile === 'defense' ? '守り思考の真骨頂です。' : '';
+      sentences.push(`テンパイですが、この手の見返りは${gain}点ほどで、${threatNoun}に無筋を押して${loss ? `${loss}点級の` : ''}放銃と引き換えにする価値がありません。${styleVoice}テンパイに未練を残さず、安全な牌から切って守ります。`);
     } else if (factors.has('MAWASHI_SAFE_ADVANCE')) {
       // 選んだ牌に安全根拠が無いのに「通っている牌で回す」と言わない(2026-08-22ペルソナ検品)
       const mawashiTile = tileAt(view, action.index);
