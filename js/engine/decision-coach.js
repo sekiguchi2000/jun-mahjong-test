@@ -399,7 +399,8 @@ function planAlternativeParts(view, analysis) {
   const handAll = handAllOf(view);
   const plans = evaluateHandPlans(handAll, view?.melds ?? [], planContext);
   const mainPlan = selectedMetrics.planEvaluation.topPlans?.[0]?.code;
-  const parts = [];
+  // 同じ打牌に落ちる分岐は1文にまとめる(カルテ49号: 「手なりなら南」「役牌速攻なら南」の重複)
+  const branchByTile = new Map();
   for (const plan of plans) {
     if (plan.code === mainPlan || plan.weight < 0.3) continue;
     let best = null;
@@ -412,11 +413,14 @@ function planAlternativeParts(view, analysis) {
       if (!best || value < best.value) best = { tile, value };
     }
     if (best && selectedTile && (best.tile.kind !== selectedTile.kind || best.tile.red !== selectedTile.red)) {
-      parts.push(`${planLabelFor(plan.code, view)}を狙うなら、${tileName(best.tile.kind, best.tile.red)}を切る分岐もあります。`);
+      const key = `${best.tile.kind}:${best.tile.red === true}`;
+      if (!branchByTile.has(key)) branchByTile.set(key, { tile: best.tile, labels: [] });
+      branchByTile.get(key).labels.push(planLabelFor(plan.code, view));
     }
-    if (parts.length >= 2) break;
+    if (branchByTile.size >= 2) break;
   }
-  return parts;
+  return [...branchByTile.values()].map(branch =>
+    `${branch.labels.join('や')}を狙うなら、${tileName(branch.tile.kind, branch.tile.red)}を切る分岐もあります。`);
 }
 
 function suitNameOf(suit) {
@@ -664,6 +668,7 @@ function comparisonParts(view, analysis) {
   const honorNarrowerNames = [];
   let honorNarrowerDelta = null;
   let furitenClauseSaid = false;
+  const widerLosses = [];
   let narrowerNoted = false;
   const terminalEquals = [];
   for (const { candidate, tile } of alternatives) {
@@ -784,10 +789,32 @@ function comparisonParts(view, analysis) {
         continue;
       }
       const reason = dominantKeepReason(candidate, selected, name, view);
-      parts.push(reason
-        ? `${name}を切る案の方が受け入れは${-delta}枚広いですが、${reason}、${selectedName}を先に切ります。`
-        : `${name}を切る案の方が受け入れは${-delta}枚広く、ほぼ互角です。残す価値の合計でわずかに${selectedName}切りを取っています。`);
+      if (reason) {
+        // 同じ残留理由が並ぶときは1文へまとめる(カルテ49号: 字牌5種に同型文が5連発した)
+        widerLosses.push({ name, delta: -delta, reason });
+      } else {
+        parts.push(`${name}を切る案の方が受け入れは${-delta}枚広く、ほぼ互角です。残す価値の合計でわずかに${selectedName}切りを取っています。`);
+      }
       continue;
+    }
+  }
+  {
+    const reasonGroups = new Map();
+    for (const item of widerLosses) {
+      const key = item.reason.startsWith(item.name) ? item.reason.slice(item.name.length) : item.reason;
+      if (!reasonGroups.has(key)) reasonGroups.set(key, []);
+      reasonGroups.get(key).push(item);
+    }
+    for (const [key, items] of reasonGroups) {
+      if (items.length === 1) {
+        const item = items[0];
+        parts.push(`${item.name}を切る案の方が受け入れは${item.delta}枚広いですが、${item.reason}、${selectedName}を先に切ります。`);
+      } else {
+        const names = items.map(item => item.name).join('・');
+        const maxDelta = Math.max(...items.map(item => item.delta));
+        const shared = key.replace(/^(は|の方が)/, '');
+        parts.push(`${names}を切る案の方が受け入れは広いです（最大${maxDelta}枚）が、いずれも${shared}、${selectedName}を先に切ります。`);
+      }
     }
   }
   if (valueHonorEquals.length === 1) {

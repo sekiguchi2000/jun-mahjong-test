@@ -115,6 +115,23 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
       value: 1.6,
       notes: [],
     });
+  } else if (flushSize >= 10 && honorCount >= 5 && suitCounts[bestSuit] >= 3) {
+    // 字牌が過半の染め気配 (カルテ49号 2026-09-01 ユーザー指摘「この牌姿で無視はなくない?」):
+    // 一色側がまだ薄くても字5枚+で材料10枚超なら、誰もが混一色を狙いたくなる牌姿。
+    // 決め打ちはしない=重み上限0.6(両にらみ表示・色外しは発動しない)で視野にだけ入れる。
+    // ただし色外に完成面子がある手は対象外(48A: 456m入りテンパイに染めを語らない)
+    const offSuitComplete = decomposeBlocks(handAll, context).blocks.some(block =>
+      (block.type === 'run' || block.type === 'set') && block.kinds.length === 3 &&
+      block.kinds.every(kind => !isHonor(kind) && suitIndex(kind) !== bestSuit));
+    if (!offSuitComplete) {
+      plans.push({
+        code: 'HONITSU',
+        suit: bestSuit,
+        weight: Math.min(0.6, (flushSize - 9) / 4),
+        value: 1.6,
+        notes: [],
+      });
+    }
   }
 
   // --- チャンタ: 么九牌を含みうるブロック比率で立ち上げ ---
