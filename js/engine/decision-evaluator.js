@@ -463,6 +463,38 @@ function compareDefenseCandidate(left, right) {
   return 0;
 }
 
+// 受け入れ1枚の「質」: その牌を引いたとき手の中で作れる最良の形で重みを決める。
+// 両面・面子完成・暗刻化=1.0 / カンチャン=0.75 / 端の対子化=0.65 / ペンチャン=0.55。
+// 1枚頭数の受け入れ(一手先)がペンチャン種の悪形進行を満額で数える弱点への処方(カルテ54号)
+export function acceptanceQualityWeight(counts, kind) {
+  if (kind >= 27) {
+    if (counts[kind] >= 2) return 1.0;      // 刻子化
+    return counts[kind] === 1 ? 0.7 : 0.4;  // 対子化/完全孤立
+  }
+  const suitBase = Math.floor(kind / 9);
+  const offset = kind % 9;
+  const has = delta => {
+    const target = kind + delta;
+    const targetOffset = offset + delta;
+    if (targetOffset < 0 || targetOffset > 8) return false;
+    return Math.floor(target / 9) === suitBase && counts[target] > 0;
+  };
+  // 順子を直接完成させる引き
+  if ((has(-2) && has(-1)) || (has(-1) && has(1)) || (has(1) && has(2))) return 1.0;
+  if (counts[kind] >= 2) return 1.0;        // 暗刻化
+  let best = 0.4;                            // 完全孤立の種まき
+  if (counts[kind] === 1) best = Math.max(best, (offset === 0 || offset === 8) ? 0.65 : 0.85);
+  for (const delta of [-1, 1]) {
+    if (!has(delta)) continue;
+    const low = Math.min(offset, offset + delta);
+    const high = Math.max(offset, offset + delta);
+    const penchan = low === 0 || high === 8;
+    best = Math.max(best, penchan ? 0.55 : 1.0);
+  }
+  if (has(-2) || has(2)) best = Math.max(best, 0.75);
+  return best;
+}
+
 export function pickSafeTileDetailed(handAll, threats, view, discardCandidates = []) {
   if (threats.length === 0) return { index: -1, assessment: null };
   const visible = visibleCounts(view);
@@ -678,6 +710,7 @@ function discardCandidate({
   const counts = toCounts(rest);
   const afterShanten = cachedShanten(shantenCache, counts, meldCount);
   let ukeirePhysical = calculateUkeire ? 0 : null;
+  let ukeireQuality = calculateUkeire ? 0 : null;
   const ukeireByKind = [];
   const improvingKinds = [];
   if (calculateUkeire) {
@@ -686,11 +719,19 @@ function discardCandidate({
       counts[kind]++;
       if (cachedShanten(shantenCache, counts, meldCount) < afterShanten) {
         improvingKinds.push(kind);
+        counts[kind]--;
+        // 受け入れの質 (カルテ54号 2026-09-01 ユーザー指摘「一手先だけしか考えてないのでは。
+        // 1萬に付く2萬はペンチャンで、後半どうせ始末する」): 進んだ先にできる形で
+        // 1枚ごとに重み付けする。頭数(physical)は表示・事実用にそのまま残す。
+        // テンパイ入り(afterShanten=0)の受け入れは待ち牌そのものなので割引しない
+        const weight = afterShanten === 0 ? 1 : acceptanceQualityWeight(counts, kind);
+        counts[kind]++;
         // visibleは打牌予定牌も既知牌として含む。自牌を二重控除しない。
         const remaining = remainingCopies(visible, kind);
         if (remaining > 0) {
           ukeirePhysical += remaining;
-          ukeireByKind.push({ kind, remaining });
+          ukeireQuality += remaining * weight;
+          ukeireByKind.push({ kind, remaining, weight });
         }
       }
       counts[kind]--;
@@ -831,8 +872,9 @@ function discardCandidate({
   // (カルテ9号: 發の暗刻から切った実戦バグ)。同一向聴内の比較なので順序は保たれ、
   // 差分だけが縮んでプラン・骨組み・安全の項が相対的に強くなる。
   const shantenDamp = afterShanten <= 1 ? 1 : afterShanten === 2 ? 0.65 : afterShanten === 3 ? 0.5 : 0.35;
+  // スコアは質付き受け入れで比べる(カルテ54号)。物理枚数は表示・事実として保持
   const utilityScore = calculateUkeire
-    ? ukeirePhysical * context.phase.efficiencyWeight * shantenDamp + utilityAdjustment
+    ? ukeireQuality * context.phase.efficiencyWeight * shantenDamp + utilityAdjustment
     : null;
   let riichiEvaluation = null;
   let declareRiichi = false;
@@ -948,6 +990,7 @@ function discardCandidate({
     metrics: {
       shanten: afterShanten,
       ukeirePhysical,
+      ukeireQuality: ukeireQuality === null ? null : Math.round(ukeireQuality * 10) / 10,
       ukeireByKind,
       utilityAdjustment,
       utilityAdjustments,

@@ -141,13 +141,20 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     if (isHonor(kind) || isTerminal(kind)) yaochuBlocks += counts[kind];
     else if (numOf(kind) === 2 || numOf(kind) === 8) yaochuBlocks += counts[kind] * 0.5;
   }
-  if (yaochuBlocks >= 8) {
-    plans.push({
-      code: 'CHANTA',
-      weight: Math.min(1, (yaochuBlocks - 7) / 5),
-      value: 1.4,
-      notes: [],
-    });
+  // 字牌だらけの雑手(カルテ34d/54号): 単独字牌4種+なら、受け入れの質では伸びない
+  // 字牌にも「チャンタ・重なり見合い」の残留価値を下駄で与える。質付き受け入れ(54号)
+  // 導入で速度側が字牌を正しく減点するようになったぶん、価値側をプラン層が持たないと
+  // 34号裁定(中張から整理)が崩れるため
+  const honorSingles = Array.from({ length: 7 }, (_, i) => 27 + i)
+    .filter(kind => counts[kind] === 1).length;
+  // ホンイツが立つ手はそちらの枠で字牌を語る(カルテ49号と衝突させない)
+  const honorHeavyFloor = (yaochuBlocks >= 7 && honorSingles >= 4 && melds.length === 0 &&
+    !plans.some(plan => plan.code === 'HONITSU')) ? 0.65 : 0;
+  const chantaWeight = Math.max(
+    yaochuBlocks >= 8 ? Math.min(1, (yaochuBlocks - 7) / 5) : 0,
+    honorHeavyFloor);
+  if (chantaWeight > 0) {
+    plans.push({ code: 'CHANTA', weight: chantaWeight, value: 1.4, notes: [] });
   }
 
   // --- 七対子: 対子4組以上で立ち上げ。完成面子があるほど現実味が薄れるため減衰 ---

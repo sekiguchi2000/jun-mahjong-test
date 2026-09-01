@@ -173,7 +173,12 @@ function planKeepPhrase(planEvaluation, view = null) {
     if (PLAN_NOTE_PHRASES[note]) return PLAN_NOTE_PHRASES[note];
   }
   const top = planEvaluation?.topPlans?.[0]?.code;
-  if (top && PLAN_LABELS[top]) return `${planLabelFor(top, view)}の本線に入る牌`;
+  if (top && PLAN_LABELS[top]) {
+    const label = planLabelFor(top, view);
+    // 「手なりの本線に入る牌」は循環的で意味が伝わらない(カルテ54号)。実質を言う
+    if (label.startsWith('手なり')) return '中寄りでまだ良形に育つ位置の牌';
+    return `${label}の本線に入る牌`;
+  }
   return null;
 }
 
