@@ -600,7 +600,10 @@ function planHeadlineSentences(selected, view) {
       sentences.push('この局は対子場だから、七対子だけを狙います。対子は対子を呼びます。');
     } else if (top.code === 'FORMAL_TENPAI') {
       sentences.push('この手はもう役を付けにくい形です。ここからは流局時のテンパイ料を目標に、形のテンパイへ向かいます。');
-    } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
+    } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld &&
+        !handAllOf(view).some(tile => (isHonor(tile.kind) || numOf(tile.kind) === 1 || numOf(tile.kind) === 9) &&
+          handAllOf(view).filter(item => item.kind === tile.kind).length >= 2)) {
+      // 么九対子を抱えたまま「タンヤオに切り替えます」と言わない(カルテ57号)
       sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
     } else if ((top.code === 'HONITSU' || top.code === 'KOKUSHI') && (top.weight ?? 0) < 0.8) {
       // 決め打ち系プラン(染め/国士)の移行期は断言しない(自走triage 2026-08-31)。

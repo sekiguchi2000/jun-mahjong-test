@@ -66,7 +66,19 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     const handCounts = toCounts(handAll);
     const ankoCount = handCounts.filter(count => count >= 3).length;
     const ankoDamp = ankoCount >= 2 ? 0.3 : ankoCount === 1 ? 0.75 : 1;
-    const baseWeight = Math.max(ankoCount >= 2 ? 0.05 : 0.35, Math.min(1, tanyaoRatio * 1.15)) * ankoDamp;
+    // 么九の対子はタンヤオでは丸ごと壊すブロック(カルテ57号 2026-09-01: 9m9m+東東を
+    // 抱えたままポン直後に「タンヤオに切り替えます」と2mの対子を割った)。枚数比率では
+    // 見えないので対子数で強く減衰する
+    let yaochuPairCount = 0;
+    for (let kind = 0; kind < KIND_COUNT; kind++) {
+      if (handCounts[kind] >= 2 && (isHonor(kind) || isTerminal(kind))) yaochuPairCount++;
+    }
+    // TANYAO_PINFUは汎用の数牌価値の床を兼ねるため、門前では減衰させない
+    // (門前2対子でも17号等の一般手が痩せた)。副露済み(門前価値なし)×么九対子2組=
+    // ブロック2つの解体が必須、のときだけ非現実として強く減衰する
+    const yaochuPairDamp = (melds.length >= 1 && yaochuPairCount >= 2) ? 0.15 : 1;
+    const baseWeight = Math.max(ankoCount >= 2 ? 0.05 : 0.35, Math.min(1, tanyaoRatio * 1.15)) *
+      ankoDamp * yaochuPairDamp;
     plans.push({
       code: 'TANYAO_PINFU',
       weight: baseWeight,
@@ -560,6 +572,18 @@ export function tileRetentionValue(tile, plans, handAll, context = {}) {
   if (offFlushSuit && !tile.red) {
     retention = Math.min(retention, 0) - 0.6 * strongFlushPlan.weight * strongFlushPlan.value;
     notes.add('OFF_FLUSH_SHED');
+  }
+
+  // 強トイトイの浮き牌整理 (カルテ57号 2026-09-01: トイトイ名目のポン直後に対子の
+  // 2mを割った)。トイトイが最有力プランのとき、対子未満の中張浮き牌は「順子ターツの骨」
+  // ではなく退去予定者。ブロック保護を打ち消し、対子より先に払わせる
+  const toitoiPlan = plans.find(plan => plan.code === 'TOITOI');
+  const toitoiStrength = toitoiPlan ? toitoiPlan.weight * toitoiPlan.value : 0;
+  const toitoiTop = toitoiPlan !== undefined && toitoiStrength >= 0.7 &&
+    plans.every(plan => plan.weight * plan.value <= toitoiStrength + 1e-9);
+  if (toitoiTop && !isHonor(kind) && counts[kind] === 1 && !tile.red) {
+    retention = Math.min(retention, 0.2);
+    notes.add('TOITOI_SHED_FLOATER');
   }
 
   // 赤牌そのものは常に高価値(確定1翻)。形の価値に上乗せし、受け入れ数枚差で手放さない
