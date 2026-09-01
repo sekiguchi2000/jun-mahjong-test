@@ -709,6 +709,8 @@ function comparisonParts(view, analysis) {
   let furitenClauseSaid = false;
   const widerLosses = [];
   let narrowerNoted = false;
+  const narrowerSameSpeed = [];
+  let muchNarrowerExists = false;
   const terminalEquals = [];
   for (const { candidate, tile } of alternatives) {
     const metrics = candidate.metrics ?? {};
@@ -774,6 +776,13 @@ function comparisonParts(view, analysis) {
       if (!narrowerNoted && delta <= 3 && candidate.metrics?.shanten === selectedMetrics.shanten) {
         narrowerNoted = true;
         parts.push(`${name}を切る案も互角に近いですが、受け入れが${delta}枚狭くなります。`);
+      } else if (candidate.metrics?.shanten === selectedMetrics.shanten) {
+        // 同速で狭いだけの案を黙って落とすと「残りは遠くなる」に誤って飲み込まれる
+        // (カルテ53号 2026-09-01: 1萬・9萬切りは同速なのに説明ゼロで、7索最大の
+        // 枚数根拠も言わなかった)。まとめて枚数差ごと開示する。ただし大差(13枚+、
+        // 順子破壊級)は同じ束に入れると幅が壊れるので末尾の一括文へ回す
+        if (delta <= 12) narrowerSameSpeed.push({ name, delta });
+        else muchNarrowerExists = true;
       }
       continue;
     }
@@ -883,12 +892,22 @@ function comparisonParts(view, analysis) {
       parts.push(`${item.name}から切る選択もありますが、${item.name}はドラです。切ると1翻ぶん打点を失うため、手放すのは形が決まってからにします。`);
     }
   }
+  if (narrowerSameSpeed.length > 0) {
+    const names = narrowerSameSpeed.map(item => item.name).join('・');
+    const deltas = narrowerSameSpeed.map(item => item.delta);
+    const low = Math.min(...deltas);
+    const high = Math.max(...deltas);
+    const range = low === high ? `${low}枚` : `${low}〜${high}枚`;
+    parts.push(`${names}を切る案も手の速さは同じですが、受け入れが${range}狭くなります。この枚数差が${selectedName}を先に切る理由です。`);
+  }
   if (slowerNames.length === 1) {
     parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);
   } else if (slowerNames.length >= 2 && slowerNames.length <= 3) {
     parts.push(`${slowerNames.join('・')}を切る案は、テンパイが遠くなるため外しています。`);
   } else if (slowerNames.length > 3) {
-    parts.push('残りの牌は、切るとテンパイが遠くなるため候補から外しています。');
+    parts.push(muchNarrowerExists
+      ? '残りの牌は、切るとテンパイが遠くなるか、受け入れが大きく狭くなるため候補から外しています。'
+      : '残りの牌は、切るとテンパイが遠くなるため候補から外しています。');
   }
   return parts;
 }
@@ -1063,7 +1082,28 @@ function turnExplanationParts(view, analysis) {
     } else if (factors.has('LEAST_RISK_NON_GENBUTSU') || factors.has('RIICHI_SAFE_TILE')) {
       sentences.push(`${openOnlyThreat ? '満貫級が見えている副露の相手がいるので' : '相手にリーチがあるので'}、完全な安全牌ではなくても、公開情報から比べて危険度が低い牌を選びます。`);
     } else {
-      sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
+      // 選んだ牌が「完成面子の余りコピー」なら、汎用文でなく重複の事実で言う
+      // (カルテ53号: 678索完成済みの余り7索を切る理由が伝わらなかった)
+      const spareInfo = (() => {
+        const tile = tileAt(view, action.index);
+        if (!tile || isHonor(tile.kind)) return null;
+        const handAll = handAllOf(view);
+        const copies = handAll.filter(item => item.kind === tile.kind).length;
+        if (copies < 2) return null;
+        const { chosen } = decomposeBlocks(handAll, coachPlanContext(view));
+        const run = chosen.find(block => block.type === 'run' && block.kinds.includes(tile.kind));
+        if (!run) return null;
+        const used = chosen.reduce((sum, block) =>
+          sum + block.kinds.filter(kind => kind === tile.kind).length, 0);
+        return copies > used ? { run } : null;
+      })();
+      if (spareInfo) {
+        const runName = spareInfo.run.kinds.map(kind => tileName(kind)).join('');
+        const cutName = tileName(tileAt(view, action.index).kind);
+        sentences.push(`${runName}がすでに完成しているので、余った${cutName}は同じ場所の仕事しかありません。切っても形は崩れず、手の幅が最も残ります。`);
+      } else {
+        sentences.push('この牌を切っても、手の中の組み合わせを崩しすぎず、次のツモで前に進めます。');
+      }
     }
     // 読みの言語化 (2026-08-22ユーザー設計): 相手の高さを証拠つきで見積もり、
     // 「あがられたときの傷の深さ」「押す見返り」まで一続きで説明する
