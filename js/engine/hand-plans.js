@@ -196,6 +196,61 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     });
   }
 
+  // --- 三色同順: 同じ並びが「1色完成+1色2/3以上」なら視野に入れる (カルテ50号
+  // 2026-09-01 ユーザー指示「少し見えている役を無視しない」を全役に通す監査) ---
+  let bestSanshoku = null;
+  for (let low = 0; low <= 6; low++) {
+    const progress = [0, 1, 2].map(suit =>
+      [0, 1, 2].filter(offset => counts[suit * 9 + low + offset] > 0).length);
+    const sorted = [...progress].sort((a, b) => b - a);
+    const total = progress[0] + progress[1] + progress[2];
+    // total7以上(1色完成+2/3+2/3 か 完成2色+1枚)を「見えている」の下限とする
+    // (total6=3色目が孤立1枚では薄すぎ、カルテ31号bの二番手を雑音で奪った)
+    if (sorted[0] === 3 && sorted[1] >= 2 && total >= 7) {
+      if (!bestSanshoku || total > bestSanshoku.total) bestSanshoku = { low, total };
+    }
+  }
+  if (bestSanshoku) {
+    plans.push({
+      code: 'SANSHOKU', low: bestSanshoku.low,
+      weight: Math.min(0.7, (bestSanshoku.total - 6) / 3), value: 1.3, notes: [],
+    });
+  }
+
+  // --- 一気通貫: 1色の123/456/789が「1組完成+全組に種あり+6種以上」で視野に ---
+  for (let suit = 0; suit < 3; suit++) {
+    const groups = [0, 3, 6].map(base =>
+      [0, 1, 2].filter(offset => counts[suit * 9 + base + offset] > 0).length);
+    const distinct = groups[0] + groups[1] + groups[2];
+    if (groups.some(g => g === 3) && groups.every(g => g >= 1) && distinct >= 6) {
+      plans.push({
+        code: 'ITTSU', suit,
+        weight: Math.min(0.7, (distinct - 5) / 4), value: 1.3, notes: [],
+      });
+      break;
+    }
+  }
+
+  // --- 小三元・大三元(全思考): 三元3種のうち2種が対子以上なら誰でも視野に入る。
+  // 副露済みの三元刻子も枚数に数える ---
+  const dragonEff = [31, 32, 33].map(kind => {
+    let copies = counts[kind];
+    for (const meld of melds) if (meld.tiles?.[0]?.kind === kind) copies += 3;
+    return copies;
+  });
+  if (dragonEff.filter(c => c >= 1).length === 3 && dragonEff.filter(c => c >= 2).length >= 2) {
+    plans.push({ code: 'SANGEN', weight: 0.8, value: 2, notes: [] });
+  }
+
+  // --- 国士無双(全思考): 么九9種以上で視野に(サワカは7種から前のめり) ---
+  let yaochuKindCountAll = 0;
+  for (let kind = 0; kind < KIND_COUNT; kind++) {
+    if (counts[kind] >= 1 && (isHonor(kind) || isTerminal(kind))) yaochuKindCountAll++;
+  }
+  if (melds.length === 0 && yaochuKindCountAll >= 9) {
+    plans.push({ code: 'KOKUSHI', weight: Math.min(1, (yaochuKindCountAll - 7) / 5), value: 3, notes: [] });
+  }
+
   // --- サワカ特殊プラン (context.specialPlans=true のキャラ専用) ---
   if (context.specialPlans === true) {
     // 国士無双: 么九牌7種以上で一直線
@@ -203,15 +258,12 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     for (let kind = 0; kind < KIND_COUNT; kind++) {
       if (counts[kind] >= 1 && (isHonor(kind) || isTerminal(kind))) yaochuKindCount++;
     }
-    if (melds.length === 0 && yaochuKindCount >= 7) {
+    if (melds.length === 0 && yaochuKindCount >= 7 && !plans.some(plan => plan.code === 'KOKUSHI')) {
       plans.push({ code: 'KOKUSHI', weight: Math.min(1, (yaochuKindCount - 6) / 5), value: 3, notes: [] });
     }
-    // 大三元・小三元: 三元牌3種があり、うち2種以上が対子以上
-    const dragonKinds = [31, 32, 33].filter(kind => counts[kind] >= 1).length;
-    const dragonPairs = [31, 32, 33].filter(kind => counts[kind] >= 2).length;
-    if (dragonKinds === 3 && dragonPairs >= 2) {
-      plans.push({ code: 'SANGEN', weight: 0.9, value: 2.5, notes: [] });
-    }
+    // 大三元・小三元: 一般枠(カルテ50号)より強気の重み付けへ上書き
+    const sangenPlan = plans.find(plan => plan.code === 'SANGEN');
+    if (sangenPlan) { sangenPlan.weight = 0.9; sangenPlan.value = 2.5; }
     // ホンイツ前のめり: 一色+字牌が8枚あれば通常閾値(9枚)を待たずに立てる
     if (flushSize >= 8 && suitCounts[bestSuit] >= 5 && !plans.some(plan => plan.code === 'HONITSU')) {
       plans.push({ code: 'HONITSU', suit: bestSuit, weight: 0.8, value: 1.6, notes: [] });
@@ -356,6 +408,15 @@ function planSupportForTile(plan, tile, counts, context) {
         return { support: counts[kind] >= 2 ? 1.3 : 1.1, notes: [] };
       }
       return { support: 0, notes: [] };
+    case 'SANSHOKU': {
+      if (isHonor(kind)) return { support: 0, notes: [] };
+      const offset = kind % 9;
+      return offset >= plan.low && offset <= plan.low + 2
+        ? { support: 0.85, notes: [] } : { support: 0, notes: [] };
+    }
+    case 'ITTSU':
+      return !isHonor(kind) && suitIndex(kind) === plan.suit
+        ? { support: 0.8, notes: [] } : { support: 0, notes: [] };
     case 'SANGEN': {
       if (kind >= 31) return { support: 1.3, notes: [] };
       if (isHonor(kind)) return { support: 0.2, notes: [] };

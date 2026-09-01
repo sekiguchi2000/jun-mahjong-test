@@ -124,6 +124,12 @@ const PLAN_LABELS = {
   TOITOI: 'トイトイ（対子を刻子に育てる）',
   YAKUHAI_SECURED: '役牌確定（役はあるので最速でまとめる）',
   FORMAL_TENPAI: '形式テンパイ（役が付けにくいのでテンパイ料が目標）',
+  // カルテ50号(2026-09-01): 「少し見えている役を無視しない」。以下は視野プランで、
+  // 立っていれば本線宣言か「◯を狙うなら…分岐」で必ず言及される
+  SANSHOKU: '三色同順（同じ並びを三つの色で揃える）',
+  ITTSU: '一気通貫（一つの色で1〜9を揃える）',
+  SANGEN: '小三元・大三元（三元牌を集める）',
+  KOKUSHI: '国士無双（么九牌13種を集める）',
 };
 
 const PLAN_NOTE_PHRASES = {
@@ -588,10 +594,12 @@ function planHeadlineSentences(selected, view) {
       sentences.push('この手はもう役を付けにくい形です。ここからは流局時のテンパイ料を目標に、形のテンパイへ向かいます。');
     } else if (top.code === 'TANYAO_PINFU' && second?.code === 'TOITOI' && hasPonMeld) {
       sentences.push('トイトイも見えますが、こちらの方が早くあがれそうなので、狙いをタンヤオに切り替えます。');
-    } else if (top.code === 'HONITSU' && (top.weight ?? 0) < 0.8) {
-      // 移行期の染め(材料10枚前後)は断言しない(自走triage 2026-08-31: 「本線は
-      // ホンイツです」と言いながら色外ターツを「伸ばしたい形」に並べる矛盾)
-      sentences.push('まだ本線を一本に決めない牌姿です。手なりとホンイツの両にらみで進めます。');
+    } else if ((top.code === 'HONITSU' || top.code === 'KOKUSHI') && (top.weight ?? 0) < 0.8) {
+      // 決め打ち系プラン(染め/国士)の移行期は断言しない(自走triage 2026-08-31)。
+      // 二番手プランがあればそれと並べて言う(カルテ50号: 国士が視野から消えていた)
+      const partner = second && PLAN_LABELS[second.code] && second.code !== top.code
+        ? planLabelFor(second.code, view) : '手なり';
+      sentences.push(`まだ本線を一本に決めない牌姿です。${partner}と${planLabelFor(top.code, view)}の両にらみで進めます。`);
     } else {
       sentences.push(`今の本線は${planLabelFor(top.code, view)}です。`);
     }
