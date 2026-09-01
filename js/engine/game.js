@@ -131,6 +131,17 @@ export class Game {
     }
     this.dealerCeremony = suppliedCeremony;
     this.dealerCeremonyPending = Boolean(suppliedCeremony && !resume);
+    // EVロールアウト用の途中局面注入(playRoundBody参照)。通常対局ではnull
+    this.injectedRound = options.injectedRound ?? null;
+    if (this.injectedRound?.roundStart) {
+      const start = this.injectedRound.roundStart;
+      if (start.points) this.points = [...start.points];
+      if (Number.isInteger(start.roundWindIdx)) this.roundWindIdx = start.roundWindIdx;
+      if (Number.isInteger(start.kyoku)) this.kyoku = start.kyoku;
+      if (Number.isInteger(start.initialDealer)) this.initialDealer = start.initialDealer;
+      if (Number.isInteger(start.honba)) this.honba = start.honba;
+      if (Number.isInteger(start.riichiSticks)) this.riichiSticks = start.riichiSticks;
+    }
     this.honba = roundStart?.honba ?? 0;
     this.riichiSticks = roundStart?.riichiSticks ?? 0;
     this.finished = false;
@@ -442,22 +453,45 @@ export class Game {
   // 1局の内部進行。返り値 { renchan, ryukyoku, winner? }
   async playRoundBody() {
     const R = this.rules;
-    const wall = this.resumeSession?.wall
+    // EVロールアウト用の途中局面注入 (カルテ58号基盤 2026-09-02)。
+    // 対局の正規経路には一切影響しない: injectedRoundが無ければ従来どおり配牌する。
+    // 注入時も以後の進行はこの正規ロジックがそのまま回る(ルール分岐の二重実装をしない)
+    const injected = this.injectedRound ?? null;
+    this.injectedRound = null;
+    const wall = injected ? null : (this.resumeSession?.wall
       ? structuredClone(this.resumeSession.wall)
-      : buildWall(R);
-    this.currentRoundWall = immutableSnapshot(wall);
+      : buildWall(R));
+    this.currentRoundWall = injected ? null : immutableSnapshot(wall);
     this.resumeSession = null;
-    const { hands, live, deadWall } = deal(wall);
+    const dealt = injected ? null : deal(wall);
     const dealer = this.dealerOf();
 
-    const st = this.st = {
+    const st = this.st = injected ? {
+      players: injected.players.map(source => ({
+        hand: source.hand.map(tile => ({ ...tile })),
+        melds: (source.melds ?? []).map(meld => ({ ...meld, tiles: meld.tiles.map(tile => ({ ...tile })) })),
+        discards: (source.discards ?? []).map(discard => ({ ...discard, tile: { ...discard.tile } })),
+        riichi: source.riichi === true, doubleRiichi: false, ippatsu: false,
+        furiten: false, furitenTemp: false,
+        anyCalled: source.anyCalled === true,
+      })),
+      live: injected.live.map(tile => ({ ...tile })),
+      deadWall: injected.deadWall.map(tile => ({ ...tile })),
+      kanCount: injected.kanCount ?? 0,
+      discardSeq: injected.discardSeq ?? 0,
+      turn: injected.turn,
+      firstGoAround: false,
+      turnCount: injected.turnCount ?? 8,
+      lastDiscard: null, lastKanTile: null,
+      riichiThisTurn: -1,
+    } : {
       players: [0, 1, 2, 3].map(p => ({
-        hand: hands[p], melds: [], discards: [],
+        hand: dealt.hands[p], melds: [], discards: [],
         riichi: false, doubleRiichi: false, ippatsu: false,
         furiten: false, furitenTemp: false,
         anyCalled: false,   // 自分の捨て牌が鳴かれた(流し満貫用)
       })),
-      live, deadWall, kanCount: 0, discardSeq: 0,
+      live: dealt.live, deadWall: dealt.deadWall, kanCount: 0, discardSeq: 0,
       turn: dealer, firstGoAround: true, turnCount: 0,
       lastDiscard: null, lastKanTile: null,
       riichiThisTurn: -1,

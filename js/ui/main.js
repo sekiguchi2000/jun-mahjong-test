@@ -2,7 +2,7 @@
 import { makeRules, RULE_SCHEMA } from '../engine/rules.js';
 import {
   Game, GameCancelledError, availableAnkanKinds, availableKakanKinds,
-} from '../engine/game.js?v=19';
+} from '../engine/game.js?v=20';
 import { ComActor } from '../engine/ai.js?v=18';
 import { canDeclareRiichi } from '../engine/legal-actions.js';
 import { createDealerCeremony } from '../engine/opening-dealer.js?v=17';

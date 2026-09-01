@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v118-toitoi-consistency';
+const CACHE = 'jun-mahjong-v119-ev-rollout-hook';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -27,7 +27,7 @@ const ASSETS = [
   'js/engine/agari.js', 'js/engine/shanten.js', 'js/engine/yaku.js',
   'js/engine/score.js', 'js/engine/placement.js',
   'js/engine/opening-dealer.js', 'js/engine/opening-dealer.js?v=17',
-  'js/engine/game.js?v=19', 'js/engine/ai.js?v=18',
+  'js/engine/game.js?v=20', 'js/engine/ai.js?v=18',
   'js/engine/decision-contract.js', 'js/engine/decision-log.js', 'js/engine/com-characters.js?v=2', 'js/engine/progression.js?v=1',
   'js/engine/legal-actions.js', 'js/engine/decision-boundary.js',
   'js/engine/decision-evaluator.js?v=18', 'js/engine/win-uncertainty.js',
