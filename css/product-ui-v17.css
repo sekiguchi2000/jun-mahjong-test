@@ -928,8 +928,9 @@ html[data-gamepad='connected'] .no-claims-control { min-width: 146px; }
   box-shadow: 0 0 12px rgba(214, 178, 106, 0.45);
 }
 .claim-recommend-badge {
+  /* カード外上端(top:-9px)はスクロール容器に切られる(2026-09-01実機)。内側下部へ */
   position: absolute;
-  top: -9px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
   background: #d6b26a;
