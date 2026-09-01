@@ -3,7 +3,7 @@
 // 入力はユーザーにも見えている view / offer だけ。山の順番、他家の手牌、
 // 王牌の未公開部分は読まず、DecisionEvaluator の分析結果だけを文章化する。
 import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=18';
-import { isDragon, isHonor, numOf, doraFromIndicator, tileName } from './tiles.js';
+import { isDragon, isHonor, numOf, doraFromIndicator, tileName, toCounts } from './tiles.js';
 import { decomposeBlocks, evaluateHandPlans, tileRetentionValue } from './hand-plans.js';
 import { describeThreatRead, describeCushion } from './threat-read.js';
 
@@ -611,6 +611,37 @@ function planHeadlineSentences(selected, view) {
   } else if (planEvaluation?.valueBiasCode === 'PROTECT_LEAD') {
     sentences.push('リードを守る局面なので、打点より速度と安全を優先します。');
   }
+  // 視野の一言 (カルテ52号 2026-09-01: 789の2/3×3色に触れなかった): 三色・一通が
+  // 本線でなくても見えていれば、必要牌を添えて一言触れる(推奨がその材料を切らない限り)
+  const selectedKind = candidateTile(view, selected)?.kind;
+  const allPlans = evaluateHandPlans(handAllOf(view), view?.melds ?? [], coachPlanContext(view));
+  const counts = toCounts(handAllOf(view));
+  const vision = allPlans.find(plan =>
+    (plan.code === 'SANSHOKU' || plan.code === 'ITTSU') &&
+    plan.code !== top?.code && plan.weight >= 0.4);
+  if (vision && Number.isInteger(selectedKind)) {
+    if (vision.code === 'SANSHOKU') {
+      const inBand = !isHonor(selectedKind) && selectedKind % 9 >= vision.low && selectedKind % 9 <= vision.low + 2;
+      const missing = [];
+      for (let suit = 0; suit < 3; suit++) {
+        const absent = [0, 1, 2].filter(offset => counts[suit * 9 + vision.low + offset] === 0);
+        if (absent.length === 1) missing.push(tileName(suit * 9 + vision.low + absent[0]));
+      }
+      // 特筆性: 「たまたま帯に2枚ずつある」は頻出で雑音(実測15%超)。帯内2枚が
+      // 手の骨格(選抜ブロックのターツ)として2組以上あるときだけ口に出す
+      const { chosen } = decomposeBlocks(handAllOf(view), coachPlanContext(view));
+      const bandBlocks = chosen.filter(block => block.kinds.length === 2 &&
+        block.kinds.every(kind => !isHonor(kind) &&
+          kind % 9 >= vision.low && kind % 9 <= vision.low + 2)).length;
+      if (!inBand && missing.length > 0 && bandBlocks >= 3) {
+        sentences.push(`${vision.low + 1}${vision.low + 2}${vision.low + 3}の三色同順も見えています。${missing.join('・')}が入れば本線候補になるので、この形は崩さず進めます。`);
+      }
+    } else if (vision.code === 'ITTSU' && (isHonor(selectedKind) || Math.floor(selectedKind / 9) !== vision.suit) &&
+        (vision.groups ?? []).every(group => group >= 2)) {
+      // 三色と同じ特筆性基準: どこかのグループが孤立1枚のうちは口に出さない
+      sentences.push(`${suitNameOf(vision.suit)}の一気通貫も見えています。伸びればそちらへ寄せる手もあります。`);
+    }
+  }
   return sentences;
 }
 
@@ -725,7 +756,9 @@ function comparisonParts(view, analysis) {
         delta >= 0 && delta <= 9 &&
         candidate.metrics?.shanten === selectedMetrics.shanten &&
         handAllOf(view).filter(item => item.kind === tile.kind).length === 1) {
-      terminalEquals.push({ name, delta });
+      // ドラの端牌を気軽な「先切り候補」に挙げない(カルテ52号: ドラ9筒を無警告で提示した)
+      const isDora = (coachPlanContext(view)?.doraKinds ?? []).includes(tile.kind);
+      terminalEquals.push({ name, delta, isDora });
       continue;
     }
     // 序盤に字牌を残して数牌を切るのが「受け入れの広さ」由来のときは、理由を明示する
@@ -838,11 +871,17 @@ function comparisonParts(view, analysis) {
   if (honorNarrowerNames.length > 0) {
     parts.push(`セオリーどおり${honorNarrowerNames.join('・')}を先に片付ける手もあります。ただ今切ると受け入れが${honorNarrowerDelta}枚狭くなるため、ここでは手の広さを優先して${selectedName}を選びました。字牌は次の巡目以降で整理できます。`);
   }
-  if (terminalEquals.length > 0) {
-    const names = terminalEquals.map(item => item.name).join('・');
-    const maxDelta = Math.max(...terminalEquals.map(item => item.delta));
-    const deltaText = maxDelta > 0 ? `受け入れが${maxDelta}枚狭くなるのと、` : '';
-    parts.push(`${names}（孤立の端牌）から切る選択もあります。端牌は両面に当たりにくく後で安全牌にも使いやすい牌です。ただ${deltaText}3や7と繋がって両面に育つ芽が字牌より残るため、役にも形にもならない${selectedName}を先にしました。`);
+  {
+    const casualTerminals = terminalEquals.filter(item => !item.isDora);
+    if (casualTerminals.length > 0) {
+      const names = casualTerminals.map(item => item.name).join('・');
+      const maxDelta = Math.max(...casualTerminals.map(item => item.delta));
+      const deltaText = maxDelta > 0 ? `受け入れが${maxDelta}枚狭くなるのと、` : '';
+      parts.push(`${names}（孤立の端牌）から切る選択もあります。端牌は両面に当たりにくく後で安全牌にも使いやすい牌です。ただ${deltaText}3や7と繋がって両面に育つ芽が字牌より残るため、役にも形にもならない${selectedName}を先にしました。`);
+    }
+    for (const item of terminalEquals.filter(entry => entry.isDora)) {
+      parts.push(`${item.name}から切る選択もありますが、${item.name}はドラです。切ると1翻ぶん打点を失うため、手放すのは形が決まってからにします。`);
+    }
   }
   if (slowerNames.length === 1) {
     parts.push(`${slowerNames[0]}を切る案は、${selectedName}を切るよりテンパイが遠くなるため外しています。`);

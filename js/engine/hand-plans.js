@@ -204,16 +204,23 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
       [0, 1, 2].filter(offset => counts[suit * 9 + low + offset] > 0).length);
     const sorted = [...progress].sort((a, b) => b - a);
     const total = progress[0] + progress[1] + progress[2];
-    // total7以上(1色完成+2/3+2/3 か 完成2色+1枚)を「見えている」の下限とする
-    // (total6=3色目が孤立1枚では薄すぎ、カルテ31号bの二番手を雑音で奪った)
-    if (sorted[0] === 3 && sorted[1] >= 2 && total >= 7) {
-      if (!bestSanshoku || total > bestSanshoku.total) bestSanshoku = { low, total };
+    // 「見えている」の下限: ①1色完成+2/3+2/3(total7+) ②三色とも2/3(2,2,2=各色あと
+    // 1枚。カルテ52号 2026-09-01: 7m9m+889p+7s9sの789三色に触れなかった)。
+    // 3色目が孤立1枚(3,2,1=total6)は薄すぎるので立てない(31号b/50eの校正を維持)
+    if ((sorted[0] === 3 && sorted[1] >= 2 && total >= 7) || sorted[2] >= 2) {
+      if (!bestSanshoku || total > bestSanshoku.total) {
+        bestSanshoku = { low, total, allTwo: sorted[2] >= 2 };
+      }
     }
   }
   if (bestSanshoku) {
+    // (2,2,2)形=三色ともあと1枚は0.45(視野の一言が出る強さ)。それ以外は従来式
+    // (0.45の下駄を全形に履かせると視野文が15%の打席で出て雑音になる。実測校正)
+    const baseWeight = Math.min(0.7, (bestSanshoku.total - 6) / 3);
     plans.push({
       code: 'SANSHOKU', low: bestSanshoku.low,
-      weight: Math.min(0.7, (bestSanshoku.total - 6) / 3), value: 1.3, notes: [],
+      weight: bestSanshoku.allTwo ? Math.max(0.45, baseWeight) : baseWeight,
+      value: 1.3, notes: [],
     });
   }
 
@@ -224,7 +231,7 @@ export function evaluateHandPlans(handAll, melds = [], context = {}) {
     const distinct = groups[0] + groups[1] + groups[2];
     if (groups.some(g => g === 3) && groups.every(g => g >= 1) && distinct >= 6) {
       plans.push({
-        code: 'ITTSU', suit,
+        code: 'ITTSU', suit, groups,
         weight: Math.min(0.7, (distinct - 5) / 4), value: 1.3, notes: [],
       });
       break;
