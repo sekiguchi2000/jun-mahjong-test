@@ -1033,7 +1033,13 @@ function turnExplanationParts(view, analysis) {
       if (topPlanForHonor?.code === 'HONITSU' && (topPlanForHonor.weight ?? 0) >= 0.8) {
         sentences.push(`${tileName(honor.tile.kind)}はホンイツの材料ではありますが、1枚だけで役にもならず、重なりの見込みも薄い牌です。材料の中で最も軽いこの牌から整理します。`);
       } else {
-        sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。1枚だけなので、数牌のつながりを残すため先に切ります。`);
+        // 場に切れている字牌はその事実も理由として言う(カルテ56号: 1枚切れの南)
+        const cutCount = (view?.public?.players ?? []).reduce((sum, player) =>
+          sum + (player?.discards ?? []).filter(discard => discard.tile?.kind === honor.tile.kind).length, 0);
+        const loneText = cutCount >= 1
+          ? `1枚だけの上に場へ${cutCount}枚出ていて、重なりの期待も薄い牌です`
+          : '1枚だけなので';
+        sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.length ? `${honor.labels.join('・')}ではなく、` : ''}今の場では役になる牌ではありません。${loneText}${cutCount >= 1 ? '。' : '、'}数牌のつながりを残すため先に切ります。`);
       }
     } else if (honor && honor.value && honor.copies === 1) {
       sentences.push(`${tileName(honor.tile.kind)}は${honor.labels.join('・')}なので、もう1枚重なれば役になります。ただし、今の手を進めるほうが有利なら、その可能性を手放して切ることもあります。`);

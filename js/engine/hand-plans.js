@@ -406,11 +406,24 @@ function planSupportForTile(plan, tile, counts, context) {
     case 'YAKUHAI_PAIR':
       return kind === plan.kind ? { support: 1, notes: [] } : { support: 0, notes: [] };
     case 'HONITSU': {
+      // 単独字牌の材料価値は場の枯れで割り引く(カルテ56号: 1枚切れの南を満額で守った)
+      // ホンイツの字牌supportは枯れ割引なし(割り引くと色外の浮き牌より先に場風を
+      // 払う退行=カルテ49a実測。染め枠の字牌序列はユーザー裁定どおり色外優先を保つ)
       if (isHonor(kind)) return { support: 0.9, notes: [] };
       return suitIndex(kind) === plan.suit ? { support: 0.9, notes: [] } : { support: 0, notes: [] };
     }
     case 'CHANTA':
-      if (isHonor(kind) || isTerminal(kind)) return { support: 0.9, notes: [] };
+      if (isHonor(kind)) {
+        // 完全客風(役にならない風)は材料としても格下げ+枯れ割引(カルテ56号:
+        // 東=場風・西=自風・白=三元の中で、1枚切れの客風南だけを人間は先に払う)
+        // 枯れ割引のみ・下限2/3(カルテ56号: 1枚切れの南を満額で守った)。
+        // 役種による格下げはしない(0.85でもフレッシュ客風を数牌より先に切る
+        // 34d退行が出た。フレッシュな字牌の序列は34号裁定=数牌整理が先を保つ)
+        const depletion = counts[kind] >= 2 ? 1
+          : Math.max(2 / 3, Math.min(1, (context.honorLeftByKind?.[kind] ?? 3) / 3));
+        return { support: 0.9 * depletion, notes: [] };
+      }
+      if (isTerminal(kind)) return { support: 0.9, notes: [] };
       if (numOf(kind) === 2 || numOf(kind) === 8) return { support: 0.45, notes: [] };
       return { support: 0, notes: [] };
     case 'CHIITOI':

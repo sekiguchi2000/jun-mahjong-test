@@ -678,6 +678,13 @@ function strategicContext(view) {
   };
   // hand-plans.js へ渡す文脈 (AI_DESIGN_V12 第1段)
   const valueBias = placementValueBias(view);
+  // 字牌の残り枚数(カルテ56号): 場に切れた字牌は重なり期待が減る。プラン層の
+  // 材料価値(チャンタ/ホンイツの字牌キープ)へ枯れ具合を渡す
+  const visibleForHonors = visibleCounts(view);
+  const honorLeftByKind = {};
+  for (let kind = 27; kind < KIND_COUNT; kind++) {
+    honorLeftByKind[kind] = remainingCopies(visibleForHonors, kind);
+  }
   context.planContext = {
     seatWind: view.seatWind,
     roundWind: view.roundWind,
@@ -685,6 +692,7 @@ function strategicContext(view) {
     phase: context.phase.code === 'EARLY' ? 'early' : context.phase.code === 'MIDDLE' ? 'middle' : 'late',
     valueBias: valueBias.bias,
     valueBiasCode: valueBias.code,
+    honorLeftByKind,
   };
   return context;
 }
