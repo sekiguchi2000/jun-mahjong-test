@@ -24,13 +24,13 @@ export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
 export const AI_STYLES = Object.freeze({
   // cautionWeight: リーチ未満の「テンパイ気配」への警戒の強さ(キャラ差は重みだけ)
   guardian: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.3, riichiHoldPolicy: 'cautious', callDepth: 1, menzenFirst: true, tenpaiFoldValue: 3900 }),
-  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true }),
+  analyst: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true, tenpaiFoldValue: 3900 }),
   striker: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.7, riichiHoldPolicy: 'upgrade', callDepth: 3, menzenFirst: false }),
   // ガイドの思考モード(2026-08-19ユーザー設計、v14):
   //  攻め=高めを狙い多少のリスクは冒す / バランス=analyst相当 /
   //  守り=リスク完全回避(回す・無理なら降りる) / 効率=リスク無視の最速あがり
   attack: Object.freeze({ foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6, planWeight: 1.3, riichiHoldPolicy: 'upgrade', callDepth: 3, menzenFirst: false }),
-  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true }),
+  balance: Object.freeze({ foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0, riichiHoldPolicy: 'balanced', callDepth: 2, menzenFirst: true, tenpaiFoldValue: 3900 }),
   defense: Object.freeze({ foldAt: 1, riichiLiveMin: 4, ponPairMin: 4, cautionWeight: 1.8, riichiHoldPolicy: 'cautious', callDepth: 1, menzenFirst: true, tenpaiFoldValue: 5200 }),
   efficiency: Object.freeze({
     foldAt: Number.POSITIVE_INFINITY, riichiLiveMin: 1, ponPairMin: 3,
@@ -40,7 +40,7 @@ export const AI_STYLES = Object.freeze({
   // ツキ状態(あがり/放銃後)はUI側がspiritualHotへ切り替える
   spiritual: Object.freeze({
     foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
-    riichiHoldPolicy: 'balanced', spiritualRules: true, callDepth: 2, menzenFirst: true,
+    riichiHoldPolicy: 'balanced', spiritualRules: true, callDepth: 2, menzenFirst: true, tenpaiFoldValue: 3900,
   }),
   spiritualHot: Object.freeze({
     foldAt: 3, riichiLiveMin: 1, ponPairMin: 3, cautionWeight: 0.6,
@@ -59,7 +59,7 @@ export const AI_STYLES = Object.freeze({
   // サワカ=手役ロマン派(国士/大三元/ホンイツ即断/四暗刻ロン拒否)。南場沈みで攻め化
   sawaka: Object.freeze({
     foldAt: 2, riichiLiveMin: 2, ponPairMin: 4, cautionWeight: 1.0,
-    riichiHoldPolicy: 'balanced', specialPlans: true, suuankouGreed: true, southRankAttack: true, callDepth: 2, menzenFirst: true,
+    riichiHoldPolicy: 'balanced', specialPlans: true, suuankouGreed: true, southRankAttack: true, callDepth: 2, menzenFirst: true, tenpaiFoldValue: 3900,
   }),
 });
 
@@ -1496,7 +1496,11 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
   // 安手テンパイの降り (カルテ51号 2026-09-01 ユーザー裁定「親リーチに南のみで
   // 突っ張るのは守りではない」): 守り系(tenpaiFoldValue持ち)は、読み層の見返り
   // (打点+供託)が閾値以下で相手の読みがcheapでなければ、テンパイでも押さない
+  // 「ここぞ」の例外(2026-09-01ユーザー裁定): 順位を上げなければならない土壇場だけは
+  // 安手テンパイでも押してよい(バランスが突っ張るのはここぞだけ、の裏面)
+  const rankUpUrgency = view.placement?.mustPrioritizeRankUp === true;
   const cheapTenpaiFold = (style.tenpaiFoldValue ?? 0) > 0 && !style.ignoreRisk &&
+    !rankUpUrgency &&
     threats.length > 0 && currentShanten === 0 &&
     context.threatValue?.read && context.threatValue.read.band !== 'cheap' &&
     ((context.threatValue.prospect?.value ?? 0) + (context.threatValue.prospect?.pot ?? 0))
