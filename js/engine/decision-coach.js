@@ -72,7 +72,10 @@ function actionLabel(action, view, offer = null) {
   if (action.action === 'ankan') return `${Number.isInteger(action.kind) ? tileName(action.kind) : 'この牌'}を暗カン`;
   if (action.action === 'pon') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をポン`;
   if (action.action === 'minkan') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をカン`;
-  if (action.action === 'chi') return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}をチー`;
+  if (action.action === 'chi') {
+    const withTiles = (action.tiles ?? []).map(kind => tileName(kind)).join('・');
+    return `${offer?.tile ? tileName(offer.tile.kind) : 'この牌'}を${withTiles ? `${withTiles}と` : ''}チー`;
+  }
   return action.action;
 }
 
@@ -1341,7 +1344,12 @@ function shortHeadline(phase, view, analysis, offer = null) {
     if (offer?.type === 'ron' && action?.action === 'pass') return 'あがらず、次の局で順位を上げる余地を残す';
     if (action?.action === 'pon' && factors.has('YAKUHAI_PON')) return 'ポン推奨: 役牌で1翻を確定させる';
     if (action?.action === 'pon' && factors.has('TOITOI_ROUTE')) return 'ポン推奨: トイトイへ刻子を増やす';
-    if (action?.action === 'chi') return 'チーで形を一歩進める';
+    // どの組でチーするかを見出しで名指しする(カルテ55号 2026-09-01 ユーザー指摘
+    // 「チーって言われても、どれだよ」: 候補3組並びで指し先が無かった)
+    if (action?.action === 'chi') {
+      const tiles = (action.tiles ?? []).map(kind => tileName(kind)).join('');
+      return tiles ? `${tiles}とのチーで形を一歩進める` : 'チーで形を一歩進める';
+    }
     if (action?.action === 'minkan' || action?.action === 'kakan') return 'カンを選ぶ';
     if (!action) return offer?.type === 'ron' ? '順位優先でロンを見送る' : 'スルー推奨: 門前を守る';
     return '鳴くことで手を進める理由がある';

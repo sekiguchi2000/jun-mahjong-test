@@ -2299,20 +2299,37 @@ class UI {
         ? () => finish({ action: 'pass', source: 'autoPreference' })
         : null;
       const t = offer.tile;
+      // ガイドの推奨と一致する選択肢に「おすすめ」印を付ける(カルテ55号 2026-09-01
+      // ユーザー指摘「チーって言われても、どれだよ」: チー候補3組で指し先が無かった)
+      const recAction = coach?.action ?? null;
+      const markRecommended = (button, matches) => {
+        if (!button || !matches) return;
+        button.classList.add('claim-recommended');
+        const badge = document.createElement('span');
+        badge.className = 'claim-recommend-badge';
+        badge.textContent = 'おすすめ';
+        button.appendChild(badge);
+      };
       if (offer.type === 'ron') {
         this.addBtn(choices, 'ロン', 'danger', () => finish({ action: 'ron' }));
       } else {
         if (offer.canPon) {
-          this.addTileBtn(choices, 'ポン', [t, t, t], 1, () => finish({ action: 'pon' }));
+          const button = this.addTileBtn(choices, 'ポン', [t, t, t], 1, () => finish({ action: 'pon' }));
+          markRecommended(button, recAction?.action === 'pon');
         }
         if (offer.canKan) {
-          this.addTileBtn(choices, 'カン', [t, t, t, t], 1, () => finish({ action: 'minkan' }));
+          const button = this.addTileBtn(choices, 'カン', [t, t, t, t], 1, () => finish({ action: 'minkan' }));
+          markRecommended(button, recAction?.action === 'minkan');
         }
         if (offer.canChi) {
+          const recChiKey = recAction?.action === 'chi'
+            ? [...(recAction.tiles ?? [])].sort((a, b) => a - b).join('-') : null;
           for (const set of offer.canChi) {
             const seq = [...set.map(k => ({ kind: k, red: false })), { ...t }].sort((a, b) => a.kind - b.kind);
             const sideIdx = seq.findIndex(x => x.kind === t.kind);
-            this.addTileBtn(choices, 'チー', seq, sideIdx, () => finish({ action: 'chi', tiles: set }));
+            const button = this.addTileBtn(choices, 'チー', seq, sideIdx, () => finish({ action: 'chi', tiles: set }));
+            markRecommended(button, recChiKey !== null &&
+              [...set].sort((a, b) => a - b).join('-') === recChiKey);
           }
         }
       }
