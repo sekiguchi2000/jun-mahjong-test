@@ -3,7 +3,7 @@ import { makeRules, RULE_SCHEMA } from '../engine/rules.js';
 import {
   Game, GameCancelledError, availableAnkanKinds, availableKakanKinds,
 } from '../engine/game.js?v=20';
-import { ComActor } from '../engine/ai.js?v=18';
+import { ComActor } from '../engine/ai.js?v=19';
 import { canDeclareRiichi } from '../engine/legal-actions.js';
 import { createDealerCeremony } from '../engine/opening-dealer.js?v=17';
 import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.js';
@@ -28,14 +28,14 @@ import {
   writeLearningModePreferences,
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
-import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=18';
+import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=19';
 import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=2';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
   clampRulesToLevel, ruleValueUnlockLevel, achievementRows, UNLOCKS,
 } from '../engine/progression.js?v=1';
-import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=1';
+import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=2';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
 import { AudioDirector } from './audio-director.js?v=19';

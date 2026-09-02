@@ -1245,7 +1245,7 @@ function turnFacts(view, options, handAll, meldCount, currentShanten, threats, c
   ];
 }
 
-export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
+export function evaluateTurnDecision(view, options = [], profile = 'analyst', hints = {}) {
   const normalizedProfile = normalizeProfile(profile);
   let style = AI_STYLES[normalizedProfile];
   // サワカ: 南場で3位/4位なら攻め思考へ切替(特殊フラグは維持)
@@ -1544,6 +1544,16 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
       ((context.threatValue?.ownValueTiles ?? 2) <= 1 &&
         (threats.length >= 2 || (view.public?.remaining ?? 70) <= 12)));
   if (leadProtectFold) effectiveFoldAt = 0;
+  // 降りの粘着 (EV監査1号 2026-09-02): 一度降りた局は降り続ける。従来は現物を
+  // 1枚切って向聴が落ちるとfoldAt(向聴基準)が外れて再び押し始め、EVロールアウト
+  // 実測で「降り線の失点率(48%)が押し線(39%)より高い」倒錯が出た。
+  // 「脅威出現後の自分の直近打牌がその脅威への完全安全牌」を降り姿勢の証拠として、
+  // 向聴に関わらず安全ローテを継続する(viewだけから導出=決定性を保つ)
+  // 降り状態はアクターが局内で記憶し、hintsで渡す(view由来の「直近打牌が現物」
+  // プロキシは偶然の安全牌で誤爆した=カルテ20/48の回し・攻め文脈を巻き込んだ)
+  const stickyFold = hints.foldCommitted === true &&
+    Number.isFinite(style.foldAt) && !style.ignoreRisk && threats.length > 0 && !view.riichi;
+  if (stickyFold) effectiveFoldAt = Math.min(effectiveFoldAt, Math.max(0, currentShanten));
   // 安手テンパイの降り (カルテ51号 2026-09-01 ユーザー裁定「親リーチに南のみで
   // 突っ張るのは守りではない」): 守り系(tenpaiFoldValue持ち)は、読み層の見返り
   // (打点+供託)が閾値以下で相手の読みがcheapでなければ、テンパイでも押さない
@@ -1596,6 +1606,9 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst') {
           pot: context.threatValue?.prospect?.pot ?? 0,
           expectedLoss: context.threatValue?.read?.expectedLoss ?? null,
         });
+      }
+      if (stickyFold) {
+        decisiveFactors.push({ code: 'STICKY_FOLD', currentShanten });
       }
     }
   }
@@ -2083,8 +2096,8 @@ export function evaluateClaimDecision(view, offer, profile = 'analyst') {
 }
 
 export class DecisionEvaluator {
-  evaluateTurn(view, options = [], profile = 'analyst') {
-    return evaluateTurnDecision(view, options, profile);
+  evaluateTurn(view, options = [], profile = 'analyst', hints = {}) {
+    return evaluateTurnDecision(view, options, profile, hints);
   }
 
   evaluateClaim(view, offer, profile = 'analyst') {

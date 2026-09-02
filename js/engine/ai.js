@@ -9,9 +9,9 @@ import {
   pickSafeTileDetailed,
   remainingCopies,
   visibleCounts,
-} from './decision-evaluator.js?v=18';
+} from './decision-evaluator.js?v=19';
 
-export { AI_STYLES, DecisionEvaluator, isForbiddenLastPlaceWin } from './decision-evaluator.js?v=18';
+export { AI_STYLES, DecisionEvaluator, isForbiddenLastPlaceWin } from './decision-evaluator.js?v=19';
 
 export class ComActor {
   constructor(name = 'COM', profile = 'analyst') {
@@ -53,7 +53,17 @@ export class ComActor {
   }
 
   async onTurn(view, options) {
-    const analysis = this.evaluator.evaluateTurn(view, options, this.profile);
+    // 降りの粘着 (EV監査1号 2026-09-02): 局が変わったら降り状態をリセット
+    const roundKey = `${view.public?.roundWindIdx}:${view.public?.kyoku}:${view.public?.honba}`;
+    if (this.foldRoundKey !== roundKey) { this.foldRoundKey = roundKey; this.foldCommitted = false; }
+    const analysis = this.evaluator.evaluateTurn(view, options, this.profile,
+      { foldCommitted: this.foldCommitted === true });
+    // この手番で降り系の判断をしたら、以後この局は降り続ける
+    const factors = new Set((analysis.decisiveFactors ?? []).map(factor => factor.code));
+    if (factors.has('FOLD_ON_RIICHI_THREAT') || factors.has('CHEAP_TENPAI_FOLD') ||
+        factors.has('LEAD_PROTECT_FOLD') || factors.has('STICKY_FOLD')) {
+      this.foldCommitted = true;
+    }
     return this.decide(analysis.selected.action, analysis.legacyTrace, analysis);
   }
 

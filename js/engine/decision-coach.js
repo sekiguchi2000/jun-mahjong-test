@@ -2,7 +2,7 @@
 //
 // 入力はユーザーにも見えている view / offer だけ。山の順番、他家の手牌、
 // 王牌の未公開部分は読まず、DecisionEvaluator の分析結果だけを文章化する。
-import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=18';
+import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=19';
 import { isDragon, isHonor, numOf, doraFromIndicator, tileName, toCounts } from './tiles.js';
 import { decomposeBlocks, evaluateHandPlans, tileRetentionValue } from './hand-plans.js';
 import { describeThreatRead, describeCushion } from './threat-read.js';
@@ -1067,6 +1067,9 @@ function turnExplanationParts(view, analysis) {
           ? '守り思考の真骨頂です。'
           : '';
       sentences.push(`${Math.round((leadFact?.lead ?? 0) / 100) * 100}点の大きなリードがあり、この安い手で押しても得るものがありません。${styleVoice}テンパイを捨ててでも安全第一で、この局は流しにいきます。`);
+    } else if (factors.has('STICKY_FOLD')) {
+      // EV監査1号: 一度降りた局は降り続ける。「また押し始める」揺り戻しをしない
+      sentences.push(`前の巡からこの${threatNoun}に対して降りている手です。ここから押し直しても間に合わず、危険だけが残ります。降りると決めた局は最後まで安全牌で通します。`);
     } else if (factors.has('CHEAP_TENPAI_FOLD')) {
       // カルテ51号: 安手テンパイはテンパイでも降りる(ユーザー裁定「親リーチに南のみで
       // 突っ張るのは守りではない」)。見返りと想定失点を数字で対比して言う
