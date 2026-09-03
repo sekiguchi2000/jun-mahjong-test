@@ -29,8 +29,9 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=6';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=20';
-import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=4';
-import { createCharacterSelect } from './character-select.js?v=2';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS, characterFullSrc } from '../engine/com-characters.js?v=5';
+import { createCharacterSelect } from './character-select.js?v=3';
+import { playRiichiCinematic, buildWinCinematic, playResultReveal } from './cinematics.js?v=1';
 import { createHelpScreen } from './help-screen.js?v=2';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
@@ -319,6 +320,7 @@ let SEAT_TAGLINES = ['あなたの手番', '守備型・危険牌を切らない
 let COM_PROFILES = [null, 'guardian', 'analyst', 'striker'];
 let SEAT_PORTRAITS = [null, 'hyogo', 'daisuke', 'rarapi'];
 let SEAT_VOICES = [null, 'hanzo', 'joe', 'himeko'];
+let SEAT_CHARACTERS = [null, null, null, null];
 
 // 対戦相手の選択(拡張可能なCOMキャラレジストリから3席分)
 const OPPONENTS_STORAGE_KEY = 'jun-opponents-v1';
@@ -337,6 +339,7 @@ function applyOpponentSelection(ids) {
   COM_PROFILES = [null, ...characters.map(character => character.profile)];
   SEAT_PORTRAITS = [null, ...characters.map(character => character.portrait ?? 'generic')];
   SEAT_VOICES = [null, ...characters.map(character => character.voice ?? null)];
+  SEAT_CHARACTERS = [null, ...characters];
 }
 
 class UI {
@@ -1369,7 +1372,8 @@ class UI {
     $('#win-cinematic')?.classList.add('hidden');
     this.riichiStickSequence += 1;
     $('#riichi-stick-cinematic')?.classList.add('hidden');
-    $('#screen-game')?.classList.remove('win-cinematic-shake');
+    $('#riichi-cutin')?.classList.add('hidden');
+    $('#screen-game')?.classList.remove('win-cinematic-shake', 'cine-shake', 'cine-shake-strong', 'cine-shake-max');
     $('#callout')?.classList.add('hidden');
   }
 
@@ -1639,8 +1643,8 @@ class UI {
         this.renderBoard(data.state);
         this.syncWaitHint();
         if (data.riichi) {
-          await this.showRiichiStick(data.player);
-          return this.showCallout(data.player, 'リーチ');
+          // v124: 一枚絵の拡縮でなく、カットイン→棒が卓へ落ちる演出(ユーザー指示 2026-09-03)
+          return this.playRiichiCutin(data.player);
         }
         // リーチ済みの打ち手はツモ切り強制で思考時間が無いため、
         // 捨て牌を目で追えるようにここで一拍置く(qa-fast時は省略)
@@ -1928,6 +1932,46 @@ class UI {
   }
 
   // リーチ棒は置かれた直後に発声へつなぐ。WebGLに依存せず、短い演出でも卓の手番を止めない。
+  // v124 リーチ演出: 宣言者のカットイン(帯+立ち絵+千点棒の映り込み)→棒が卓中央の供託へ落ちる
+  async playRiichiCutin(player) {
+    const host = $('#riichi-cutin');
+    if (!host) return this.showRiichiStick(player);
+    const character = SEAT_CHARACTERS[player] ?? null;
+    void this.audio.playSfx('call-accent');
+    this.playCharacterVoice(player, 'riichi');
+    // 着地先: DOM中央の供託棒(縦画面)。WebGL卓(横画面)では卓中央の装置へ
+    const targetRect = () => {
+      const pot = $('#center .riichi-pot');
+      const potVisible = pot && pot.getBoundingClientRect().width > 0;
+      if (potVisible) {
+        const sticks = pot.querySelectorAll('.riichi-pot-stick');
+        const last = sticks[sticks.length - 1];
+        if (last) { last.style.visibility = 'hidden'; return last.getBoundingClientRect(); }
+        return pot.getBoundingClientRect();
+      }
+      const canvas = $('#webgl-tabletop');
+      if (canvas && canvas.getBoundingClientRect().width > 0) {
+        const r = canvas.getBoundingClientRect();
+        const w = Math.min(64, r.width * 0.05);
+        return { left: r.left + r.width / 2 - w / 2, top: r.top + r.height * 0.5 - 4, width: w, height: 8 };
+      }
+      return null;
+    };
+    await playRiichiCinematic({
+      host,
+      player,
+      name: SEAT_LABELS[player] ?? '',
+      portraitSrc: character ? characterFullSrc(character) : null,
+      line: character?.lines?.riichi ?? 'リーチ',
+      targetRect,
+      playSfx: id => { void this.audio.playSfx(id); },
+      onStickLanded: () => {
+        for (const stick of document.querySelectorAll('#center .riichi-pot .riichi-pot-stick')) stick.style.visibility = '';
+      },
+      delay: ms => this.pauseAwareDelay(ms),
+    });
+  }
+
   async showRiichiStick(player) {
     const token = ++this.riichiStickSequence;
     const el = $('#riichi-stick-cinematic');
@@ -2487,78 +2531,53 @@ class UI {
     const scene = classifyWinPresentation(data);
     const el = $('#win-cinematic');
     if (!el) return;
-    const copy = winCinematicCopy(scene, SEAT_LABELS[data.winner] ?? '和了者',
-      data.loser === null ? null : (SEAT_LABELS[data.loser] ?? '放銃者'));
-    const content = document.createElement('div');
-    content.className = 'win-cinematic-content';
-    const tier = document.createElement('div');
-    tier.className = 'win-cinematic-tier';
-    tier.textContent = scene.tierLabel;
-    const action = document.createElement('div');
-    action.className = 'win-cinematic-action';
-    action.textContent = copy.action;
-    const detail = document.createElement('div');
-    detail.className = 'win-cinematic-detail';
-    detail.textContent = copy.detail;
-    const score = document.createElement('div');
-    score.className = 'win-cinematic-score';
-    score.textContent = `${scene.total.toLocaleString('ja-JP')} 点`;
-    content.append(tier, action, detail, score);
-
-    const aura = document.createElement('div');
-    aura.className = 'win-cinematic-aura';
-    const frame = document.createElement('div');
-    frame.className = 'win-cinematic-frame';
-    const flash = document.createElement('div');
-    flash.className = 'win-cinematic-flash';
-    const particles = document.createElement('div');
-    particles.className = 'win-cinematic-particles';
-    for (let index = 0; index < scene.particleCount; index++) {
-      const particle = document.createElement('i');
-      particle.className = 'win-cinematic-particle';
-      particle.style.setProperty('--angle', `${(index * 137.508) % 360}deg`);
-      particle.style.animationDelay = `${(index % 7) * 24}ms`;
-      particles.appendChild(particle);
-    }
-    // 和了牌は、背景フレームの稲妻が落ちる一点へ独立して置く。
-    // テキストの流れに追従させず、画面比率が変わっても雷と重なるようにする。
-    const strikeTile = document.createElement('div');
-    strikeTile.className = 'win-cinematic-strike-tile';
-    if (data.winTile) strikeTile.appendChild(tileEl(data.winTile));
-    el.replaceChildren(aura, frame, flash, particles, strikeTile, content);
-    el.dataset.tier = scene.tier;
-    el.dataset.kind = scene.kind;
-    el.dataset.lightning = scene.lightning ? 'true' : 'false';
+    const character = SEAT_CHARACTERS[data.winner] ?? null;
+    const lineKey = scene.tier === 'yakuman' ? 'yakuman' : (scene.tier === 'baiman' ? 'baiman' : 'mangan');
     el.classList.remove('hidden');
-    if (scene.screenShake) $('#screen-game')?.classList.add('win-cinematic-shake');
-    void this.audio.playSfx('call-accent');
-
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+    const built = buildWinCinematic({
+      host: el,
+      scene,
+      player: data.winner,
+      name: SEAT_LABELS[data.winner] ?? '和了者',
+      loserName: data.loser === null ? null : (SEAT_LABELS[data.loser] ?? '放銃者'),
+      portraitSrc: character ? characterFullSrc(character) : null,
+      line: character?.lines?.[lineKey] ?? null,
+      tileNode: data.winTile ? tileEl(data.winTile) : null,
+      playSfx: id => { void this.audio.playSfx(id); },
+      // 「倍満以上」の括りでなく実際の限度名(倍満/三倍満/数え役満)を出す
+      tierLabel: typeof data.score?.limitName === 'string' && data.score.limitName ? data.score.limitName : null,
+    });
+    el.classList.remove('hidden');
+    const screen = $('#screen-game');
+    if (built.shake && built.shakeClass) {
+      // 揺れは格スタンプの着弾に合わせる
+      const shakeDelay = scene.tier === 'yakuman' ? 1150 : (scene.tier === 'baiman' ? 1150 : 900);
+      setTimeout(() => { if (!el.classList.contains('hidden')) screen?.classList.add(built.shakeClass); }, shakeDelay);
+    }
     const token = ++this.winCinematicSequence;
     await new Promise((resolve, reject) => {
       let settled = false;
       let unregisterCancel = () => {};
+      const cleanup = () => {
+        el.classList.add('hidden');
+        screen?.classList.remove('win-cinematic-shake', 'cine-shake', 'cine-shake-strong', 'cine-shake-max');
+      };
       const finish = () => {
         if (settled) return;
         settled = true;
         unregisterCancel();
-        if (token === this.winCinematicSequence) {
-          el.classList.add('hidden');
-          $('#screen-game')?.classList.remove('win-cinematic-shake');
-        }
+        if (token === this.winCinematicSequence) cleanup();
         resolve();
       };
       const fail = reason => {
         if (settled) return;
         settled = true;
         unregisterCancel();
-        el.classList.add('hidden');
-        $('#screen-game')?.classList.remove('win-cinematic-shake');
+        cleanup();
         reject(reason instanceof Error ? reason : new GameCancelledError(reason));
       };
       unregisterCancel = this.addCancelListener(reason => fail(new GameCancelledError(reason)));
-      // reduced motionでも結果を即時に飛ばさず、和了を認識できる短い静止時間だけ残す。
-      this.pauseAwareDelay(reducedMotion ? 420 : scene.durationMs).then(finish, fail);
+      this.pauseAwareDelay(built.durationMs).then(finish, fail);
     });
   }
 
@@ -2731,9 +2750,11 @@ class UI {
     html += `<div class="win-hand" id="win-hand-box"></div>`;
     html += `<div class="dora-line" id="dora-line-box"></div>`;
     for (const y of score.yaku) {
-      html += `<div class="yaku-line reveal-step reveal-pop"><span>${y.name}</span><span class="han">${y.yakuman ? (y.yakuman >= 2 ? 'ダブル役満' : '役満') : y.han + '翻'}</span></div>`;
+      html += `<div class="yaku-line reveal-step reveal-pop" data-han="${y.yakuman ? 0 : (y.han ?? 0)}"><span>${y.name}</span><span class="han">${y.yakuman ? (y.yakuman >= 2 ? 'ダブル役満' : '役満') : y.han + '翻'}</span></div>`;
     }
-    if (score.limitName) html += `<div class="limit-name reveal-step reveal-slam">${score.limitName}</div>`;
+    // v124: 役を数えるたびに翻カウンターが回り、満貫以上は限度名がめり込む(ユーザー指示)
+    if (!score.yakumanCount) html += `<div class="han-counter" id="win-han-counter" data-final-text="${score.fu}符 ${score.han}翻">0翻</div>`;
+    if (score.limitName) html += `<div class="limit-name reveal-step reveal-slam${score.yakumanCount || /役満/.test(score.limitName) ? ' yakuman-limit' : ''}">${score.limitName}</div>`;
     // 点数は「手の点 → 本場 → 供託 → 合計」を一段ずつ見せる
     const hasBonus = (score.honbaBonus || 0) > 0 || (score.stickBonus || 0) > 0;
     if (hasBonus && Number.isFinite(score.handTotal)) {
@@ -2744,12 +2765,23 @@ class UI {
     } else {
       html += `<div class="score-total reveal-step reveal-slam">${score.total}点</div>`;
     }
-    if (!score.yakumanCount) html += `<div class="fu-han reveal-step">${score.fu}符 ${score.han}翻</div>`;
     html += `<div class="reveal-step">${this.transferHtml(data.state.points, deltas)}</div>`;
     html += `<button class="btn primary big reveal-step" id="btn-next">次へ</button>`;
 
     const done = this.showOverlayAwait(html);
-    void this.playWinReveal();
+    void playResultReveal({
+      overlay: $('#overlay'),
+      hanCounter: $('#win-han-counter'),
+      delay: ms => this.pauseAwareDelay(ms),
+      playSfx: id => { void this.audio.playSfx(id); },
+      onSlam: () => {
+        const overlay = $('#overlay');
+        if (!overlay) return;
+        overlay.classList.remove('cine-slam-shake');
+        void overlay.offsetWidth;
+        overlay.classList.add('cine-slam-shake');
+      },
+    });
     // 手牌+和了牌
     const handBox = $('#win-hand-box');
     const tiles = [...data.hand].sort((a, b) => a.kind - b.kind);
@@ -2902,6 +2934,17 @@ async function bootstrap() {
     Object.defineProperty(window, '__JUN_PROGRESSION_CAPTURE__', {
       configurable: false,
       value: Object.freeze({ showResult: () => uiInstance.showProgressionCaptureResult() }),
+    });
+  }
+  // 開発用: ?cinematic-capture=1 で演出を単独再生できる(tools/capture-cinematics-v124.cjs)
+  if (new URLSearchParams(location.search).get('cinematic-capture') === '1') {
+    Object.defineProperty(window, '__JUN_CINEMATIC__', {
+      value: Object.freeze({
+        riichi: player => uiInstance.playRiichiCutin(player),
+        win: data => uiInstance.showWinCinematic(data),
+        result: data => uiInstance.showWin({ ...data, state: data.state ?? uiInstance.game?.publicState?.() }),
+        start: () => uiInstance.startGame(),
+      }),
     });
   }
   initTitleAtmosphere();

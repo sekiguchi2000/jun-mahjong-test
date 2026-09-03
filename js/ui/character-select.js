@@ -1,10 +1,10 @@
-// character-select.js — 対戦相手選択画面 (v2 / 2026-09-03 ユーザー指示でフロー変更)
+// character-select.js — 対戦相手選択画面 (v3 / 2026-09-03 ユーザー指示でフロー変更)
 // 流れ: キャラをタップ → 上半分の紹介パネルに紹介文と「このキャラと対戦する」 →
 //       ボタンでポップアップ「どこの卓に座らせる？」→ 席(右/正面/左)を選んで着席。
 // 紹介パネルはスクロールさせない(傾向ゲージは出さない)。
 // ロジックは持たない: 選択結果は onChange で呼び出し側(main.js)へ返すだけ。
 
-import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc } from '../engine/com-characters.js?v=4';
+import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc } from '../engine/com-characters.js?v=5';
 
 export const SEAT_NAMES = Object.freeze(['右の相手', '正面の相手', '左の相手']);
 export const SEAT_SHORT = Object.freeze(['右', '正面', '左']);

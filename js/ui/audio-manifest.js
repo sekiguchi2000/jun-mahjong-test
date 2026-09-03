@@ -40,6 +40,10 @@ export const AUDIO_MANIFEST = Object.freeze({
       src: 'assets/audio/sfx/call_accent_v1.ogg',
       gain: 0.66,
     }),
+    // v124 演出用(tools/make-cinematic-sfx.mjs で合成)
+    'stick-drop': Object.freeze({ src: 'assets/audio/sfx/stick_drop_v1.ogg', gain: 0.7 }),
+    'slam': Object.freeze({ src: 'assets/audio/sfx/slam_v1.ogg', gain: 0.8 }),
+    'yakuman-hit': Object.freeze({ src: 'assets/audio/sfx/yakuman_hit_v1.ogg', gain: 0.85, critical: true }),
   }),
 });
 
