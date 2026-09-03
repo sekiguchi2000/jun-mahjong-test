@@ -10,10 +10,10 @@
 <title>純麻雀</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/style.css?v=13">
+<link rel="stylesheet" href="css/style.css?v=14">
 <link rel="stylesheet" href="css/table-v9.css?v=16">
 <link rel="stylesheet" href="css/tokens-v15.css?v=15">
-<link rel="stylesheet" href="css/learning-modes-v15.css?v=17">
+<link rel="stylesheet" href="css/learning-modes-v15.css?v=18">
 <link rel="stylesheet" href="css/product-ui-v16.css?v=1">
 <link rel="stylesheet" href="css/product-ui-v17.css?v=3">
 <link rel="stylesheet" href="css/are-report-v1.css?v=4">
@@ -29,6 +29,8 @@
 <link rel="stylesheet" href="css/tabletop-projection-v1.css?v=1">
 <link rel="stylesheet" href="css/webgl-tabletop-v1.css?v=6">
 <link rel="stylesheet" href="css/progression-ui-v83.css?v=1">
+<link rel="stylesheet" href="css/characters-v2.css?v=1">
+<link rel="stylesheet" href="css/help-v1.css?v=1">
 </head>
 <body>
 <div id="app">
@@ -55,11 +57,7 @@
         <div class="level-bar" role="progressbar" aria-label="次のレベルまでの進捗" aria-valuemin="0" aria-valuemax="100"><i id="title-level-fill"></i></div>
         <span id="title-exp" class="title-exp"></span>
       </div>
-      <div class="opponent-line title-rivals" id="title-rivals" aria-label="対局相手">
-        <span class="title-rival"><span class="opponent-portrait hanzou"></span><small>半蔵</small></span>
-        <span class="title-rival"><span class="opponent-portrait joe"></span><small>ジョー</small></span>
-        <span class="title-rival"><span class="opponent-portrait himeko"></span><small>ひめ子</small></span>
-      </div>
+      <div class="opponent-line title-rivals" id="title-rivals" aria-label="対局相手"></div>
       <div class="title-actions">
         <button id="btn-start" class="btn primary big" data-gamepad-default><span>対局を始める</span><small>新しい半荘</small></button>
         <button id="btn-resume-session" class="btn big hidden">保存対局を再開</button>
@@ -75,20 +73,9 @@
               <span class="learning-switch" aria-hidden="true"></span>
             </label>
           </fieldset>
-          <fieldset class="opponent-picker" id="opponent-picker">
-            <legend>対戦相手（COMを選べます）</legend>
-            <label class="opponent-slot">右の相手
-              <select id="opponent-select-1" aria-label="右の相手"></select>
-            </label>
-            <label class="opponent-slot">正面の相手
-              <select id="opponent-select-2" aria-label="正面の相手"></select>
-            </label>
-            <label class="opponent-slot">左の相手
-              <select id="opponent-select-3" aria-label="左の相手"></select>
-            </label>
-            <p id="opponent-descriptions" class="opponent-descriptions" aria-live="polite"></p>
-          </fieldset>
+          <button id="btn-characters" class="btn big cast-button"><span>対戦相手を選ぶ</span><small id="btn-characters-note"></small></button>
           <button id="btn-rules" class="btn big">ルール設定</button>
+          <button id="btn-help" class="btn big">ヘルプ（遊び方・役・符・点数）</button>
           <button id="btn-stats" class="btn big">成績・分析</button>
           <button id="btn-achievements" class="btn big">アチーブメント</button>
           <button id="btn-debug-lv99" class="btn big debug-button">デバッグ: Lv99（全解除）にする</button>
@@ -106,6 +93,40 @@
       <h2>ルール設定</h2>
       <div id="rules-list"></div>
       <button id="btn-rules-done" class="btn primary big">保存して戻る</button>
+    </div>
+  </div>
+
+  <!-- 対戦相手選択画面 (v121) -->
+  <div id="screen-characters" class="screen hidden" data-gamepad-scope="characters">
+    <div class="cast-box">
+      <header class="cast-head">
+        <div class="cast-kicker">OPPONENTS · PRIVATE TABLE</div>
+        <h2>対戦相手を選ぶ</h2>
+        <p>席を選んで、キャラクターをタップ</p>
+      </header>
+      <div id="cast-seats" class="cast-seats" role="group" aria-label="3つの席"></div>
+      <div class="cast-main">
+        <div id="cast-grid" class="cast-grid" role="group" aria-label="キャラクター一覧"></div>
+        <aside id="cast-detail" class="cast-detail" aria-live="polite"></aside>
+      </div>
+      <footer class="cast-foot">
+        <button id="btn-characters-done" class="btn primary big" data-gamepad-back>この相手で戻る</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ヘルプ画面 (v121) -->
+  <div id="screen-help" class="screen hidden" data-gamepad-scope="help">
+    <div class="help-box">
+      <header class="help-head">
+        <div class="cast-kicker">HELP · RIICHI MAHJONG</div>
+        <h2>ヘルプ</h2>
+        <div id="help-tabs" class="help-tabs" role="tablist"></div>
+      </header>
+      <div id="help-body" class="help-body" role="tabpanel"></div>
+      <footer class="help-foot">
+        <button id="btn-help-done" class="btn primary big" data-gamepad-back>タイトルへ戻る</button>
+      </footer>
     </div>
   </div>
 
@@ -317,7 +338,7 @@
   </section>
 </dialog>
 
-<script type="module" src="js/ui/main.js?v=67"></script>
+<script type="module" src="js/ui/main.js?v=68"></script>
 <script src="js/ui/register-sw.js?v=14" defer></script>
 </body>
 </html>

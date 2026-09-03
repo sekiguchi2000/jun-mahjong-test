@@ -29,7 +29,9 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=19';
-import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=2';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=3';
+import { createCharacterSelect } from './character-select.js?v=1';
+import { createHelpScreen } from './help-screen.js?v=1';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
@@ -291,7 +293,7 @@ class PacedCom extends ComActor {
     this.ui = ui;
   }
 
-  // 思考間も性格の一部。半蔵は慎重、ジョーは一定、ひめ子は即断型。
+  // 思考間も性格の一部。守備型は慎重、効率型は一定、攻撃型は即断型。
   async onTurn(view, options) {
     if (location.search.includes('qa-fast')) return super.onTurn(view, options);
     const pace = {
@@ -312,10 +314,10 @@ class PacedCom extends ComActor {
 
 // ============ UI本体 ============
 const WIND_NAMES = ['東', '南', '西', '北'];
-let SEAT_LABELS = ['あなた', '半蔵', 'ジョー', 'ひめ子'];
+let SEAT_LABELS = ['あなた', '権藤兵吾', '小森ダイスケ', 'ララピ'];
 let SEAT_TAGLINES = ['あなたの手番', '守備型・危険牌を切らない', '効率型・受入枚数を最大化', '攻撃型・鳴いて速度を上げる'];
 let COM_PROFILES = [null, 'guardian', 'analyst', 'striker'];
-let SEAT_PORTRAITS = [null, 'hanzou', 'joe', 'himeko'];
+let SEAT_PORTRAITS = [null, 'hyogo', 'daisuke', 'rarapi'];
 let SEAT_VOICES = [null, 'hanzo', 'joe', 'himeko'];
 
 // 対戦相手の選択(拡張可能なCOMキャラレジストリから3席分)
@@ -432,15 +434,12 @@ class UI {
     this.opponents = loadOpponentSelection(this.preferenceStorage)
       .map((id, index) => isComUnlocked(id, this.progression.level) ? id : DEFAULT_OPPONENTS[index]);
     applyOpponentSelection(this.opponents);
-    const selects = [1, 2, 3].map(seat => $(`#opponent-select-${seat}`));
-    const descriptions = $('#opponent-descriptions');
     const rivals = $('#title-rivals');
+    const summary = $('#btn-characters-note');
+    // タイトルの肖像列と「対戦相手を選ぶ」ボタンの要約を現在の3席で描き直す
     const refresh = () => {
       const characters = this.opponents.map(id => characterById(id));
-      if (descriptions) {
-        descriptions.textContent = characters
-          .map(character => character.name + ': ' + character.description).join('\n');
-      }
+      if (summary) summary.textContent = characters.map(character => character.name).join('・');
       if (rivals) {
         rivals.replaceChildren();
         for (const character of characters) {
@@ -459,32 +458,30 @@ class UI {
         }
       }
     };
-    const populate = () => selects.forEach((select, index) => {
-      if (!select) return;
-      select.replaceChildren();
-      for (const character of COM_CHARACTERS) {
-        const option = document.createElement('option');
-        option.value = character.id;
-        const locked = !isComUnlocked(character.id, this.progression.level);
-        option.disabled = locked;
-        option.textContent = locked
-          ? `？？？ — Lv${comUnlockLevel(character.id)}で解禁`
-          : `${character.name} — ${character.tagline}`;
-        select.appendChild(option);
-      }
-      select.value = this.opponents[index];
-    });
-    populate();
-    this.refreshOpponentGates = () => { populate(); refresh(); };
-    selects.forEach((select, index) => {
-      if (!select) return;
-      select.addEventListener('change', () => {
-        this.opponents[index] = select.value;
-        try { this.preferenceStorage?.setItem(OPPONENTS_STORAGE_KEY, JSON.stringify(this.opponents)); } catch { /* 保存不可でも続行 */ }
-        applyOpponentSelection(this.opponents);
-        refresh();
+    // キャラ選択画面(v121): OS標準selectを廃止し、席→キャラの割り当てと紹介を1画面で行う
+    const screen = $('#screen-characters');
+    if (screen) {
+      this.characterSelect = createCharacterSelect({
+        root: screen,
+        level: () => this.progression.level,
+        unlockLevel: comUnlockLevel,
+        selection: () => this.opponents,
+        onChange: ids => {
+          this.opponents = ids;
+          try { this.preferenceStorage?.setItem(OPPONENTS_STORAGE_KEY, JSON.stringify(this.opponents)); } catch { /* 保存不可でも続行 */ }
+          applyOpponentSelection(this.opponents);
+          refresh();
+        },
+        onDone: () => show('title'),
       });
-    });
+    }
+    this.refreshOpponentGates = () => {
+      // Lvが変わったとき: 未解禁が混ざっていれば既定へ戻し、選択画面が開いていれば描き直す
+      this.opponents = this.opponents.map((id, index) => isComUnlocked(id, this.progression.level) ? id : DEFAULT_OPPONENTS[index]);
+      applyOpponentSelection(this.opponents);
+      refresh();
+      if (screen && !screen.classList.contains('hidden')) this.characterSelect?.render();
+    };
     refresh();
   }
 
@@ -2842,7 +2839,7 @@ class UI {
 
 // ============ 画面遷移 ============
 function show(name) {
-  for (const s of ['title', 'rules', 'game']) $(`#screen-${s}`).classList.toggle('hidden', s !== name);
+  for (const s of ['title', 'rules', 'game', 'characters', 'help']) $(`#screen-${s}`)?.classList.toggle('hidden', s !== name);
   // 「あれ?」ボタンはtransform祖先の影響を避けるためbody直下へ置き、対局画面と連動して出す
   const areButton = $('#are-report-button');
   if (areButton) {
@@ -2901,6 +2898,20 @@ async function bootstrap() {
     show('rules');
   };
   $('#btn-rules-done').onclick = () => show('title');
+  $('#btn-characters')?.addEventListener('click', () => {
+    void uiInstance.audio.unlock();
+    uiInstance.characterSelect?.open();
+    show('characters');
+  });
+  const helpScreen = $('#screen-help')
+    ? createHelpScreen({ root: $('#screen-help'), rules: () => loadRules(), onDone: () => show('title') })
+    : null;
+  uiInstance.helpScreen = helpScreen;
+  $('#btn-help')?.addEventListener('click', () => {
+    void uiInstance.audio.unlock();
+    helpScreen?.open();
+    show('help');
+  });
   show('title');
 
   // 開発用: ?autostart で即対局開始(スクリーンショット検品用)

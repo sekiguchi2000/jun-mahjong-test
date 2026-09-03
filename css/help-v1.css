@@ -1,0 +1,102 @@
+/* help-v1.css — ヘルプ画面 (v121 / 2026-09-03)
+ * 遊び方 / 役一覧 / 符計算 / 点数表。トークンは characters-v2.css の --cast-* を共有。
+ */
+
+.help-head { padding-bottom: 0; }
+.help-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 10px auto 0;
+  width: min(100%, 560px);
+}
+.help-tab {
+  padding: 8px 6px;
+  border: 1px solid var(--cast-line-dim);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: rgba(9, 22, 40, .6);
+  color: var(--cast-muted);
+  font: 600 13px/1.2 inherit;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease;
+}
+.help-tab[aria-selected="true"] {
+  color: var(--cast-gold-hi);
+  background: var(--cast-panel-hi);
+  border-color: var(--cast-line);
+  box-shadow: inset 0 2px 0 var(--cast-gold);
+}
+
+.help-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 16px;
+  color: var(--cast-copy);
+  font-size: 13px;
+  line-height: 1.65;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cast-gold-low) transparent;
+}
+.help-body h3 {
+  margin: 0 0 6px;
+  color: var(--cast-gold);
+  font: 700 14px/1.3 var(--cast-font-display);
+  letter-spacing: 2px;
+}
+.help-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.help-card {
+  padding: 12px 14px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 12px;
+  background: var(--cast-panel);
+}
+.help-card p { margin: 0; }
+.help-group { margin: 0 0 16px; }
+.help-legend, .help-note { margin: 0 0 10px; color: var(--cast-muted); font-size: 12px; }
+.help-note { margin-top: 8px; }
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, .25);
+  font-size: 12.5px;
+}
+.help-table th, .help-table td { padding: 7px 9px; border-bottom: 1px solid rgba(164, 203, 241, .12); text-align: left; vertical-align: top; }
+.help-table thead th { color: var(--cast-muted); font-size: 11px; letter-spacing: 1px; background: rgba(9, 22, 40, .8); }
+.help-table tbody tr:last-child td { border-bottom: none; }
+.help-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--cast-ivory); }
+.help-table td.num { color: var(--cast-gold-hi); font-weight: 700; }
+.yaku-table .yaku-name strong { display: block; color: var(--cast-ivory); }
+.yaku-tags { display: inline-flex; gap: 4px; margin-top: 3px; }
+.tag { padding: 1px 6px; border-radius: 999px; font-size: 9.5px; font-style: normal; letter-spacing: .5px; }
+.tag.menzen { background: rgba(79, 159, 224, .22); color: #9fd1ff; border: 1px solid rgba(79, 159, 224, .4); }
+.tag.kui { background: rgba(233, 190, 98, .16); color: var(--cast-gold-hi); border: 1px solid var(--cast-line); }
+.yaku-how span { display: block; }
+.yaku-how small { display: block; margin-top: 2px; color: var(--cast-muted); font-size: 11px; }
+.yaku-how small.rule-note { color: var(--cast-gold); }
+
+.help-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.score-table { min-width: 560px; }
+.score-table th:first-child, .score-table tbody th { color: var(--cast-muted); white-space: nowrap; }
+.score-table td.num { font-weight: 600; color: var(--cast-copy); }
+.score-table td.num.limit { color: var(--cast-gold-hi); font-weight: 800; }
+.score-table td.num.kiriage { color: #9fd1ff; }
+
+@media (max-width: 520px) {
+  .help-body { padding: 10px 10px 14px; font-size: 12.5px; }
+  .help-table th, .help-table td { padding: 6px 6px; }
+  .help-tab { font-size: 12px; padding: 7px 4px; }
+  .yaku-table { font-size: 12px; }
+}
+@media (max-height: 420px) {
+  .help-head h2 { display: none; }
+  .help-tabs { margin-top: 4px; }
+  .help-foot { padding: 4px 12px 6px; }
+  .help-foot .btn { min-height: 44px; padding: 8px; font-size: 14px; }
+}

@@ -58,13 +58,13 @@ export const UNLOCKS = Object.freeze([
   { level: 7, kind: 'guide', value: 'efficiency', label: '打ち手ガイド「効率」' },
   { level: 10, kind: 'rule', key: 'kazoeYakuman', value: true, label: '数え役満設定' },
   { level: 15, kind: 'rule', key: 'gameLength', value: 'tonpuu', label: '東風戦' },
-  { level: 21, kind: 'com', value: 'daisuke', label: 'COM新キャラ「ダイスケ」' },
+  { level: 21, kind: 'com', value: 'ronbolt', label: 'COM新キャラ「ロンボルト」' },
   { level: 28, kind: 'guide', value: 'attack', label: '打ち手ガイド「攻め」' },
   { level: 38, kind: 'rule', key: 'gameLength', value: 'issou', label: '一荘戦' },
   { level: 50, kind: 'rule', key: 'akaDora', value: 4, label: '赤ドラ4枚設定' },
   { level: 65, kind: 'guide', value: 'defense', label: '打ち手ガイド「守り」' },
-  { level: 80, kind: 'com', value: 'chen', label: 'COM新キャラ「陳」' },
-  { level: 90, kind: 'com', value: 'sawaka', label: 'COM新キャラ「サワカ」' },
+  { level: 80, kind: 'com', value: 'wanfu', label: 'COM新キャラ「ワンフー」' },
+  { level: 90, kind: 'com', value: 'sawaka', label: 'COM新キャラ「サワカ・アックス」' },
   { level: 99, kind: 'guide', value: 'spiritual', label: '打ち手ガイド「スピリチュアル」' },
 ]);
 

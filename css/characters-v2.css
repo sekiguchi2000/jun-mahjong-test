@@ -1,0 +1,269 @@
+/* characters-v2.css — 対戦相手選択画面 (v121 / 2026-09-03)
+ * Hallmark · macrostructure: Casting board · tone: private-table dossier · anchor hue: indigo felt + brass
+ * 席3つ(上) → キャラ格子(左) + 紹介パネル(右)。短辺画面は縦積みで紹介を格子の上に置く。
+ */
+
+#screen-characters,
+#screen-help {
+  --cast-ink: #04070d;
+  --cast-ink-glass: rgba(5, 14, 28, .82);
+  --cast-ink-deep: rgba(2, 5, 10, .95);
+  --cast-panel: rgba(9, 22, 40, .72);
+  --cast-panel-hi: rgba(20, 44, 74, .78);
+  --cast-gold: #e9be62;
+  --cast-gold-hi: #ffe7a2;
+  --cast-gold-low: #80541d;
+  --cast-ivory: #fff6df;
+  --cast-copy: #d6e2f1;
+  --cast-muted: #91a5bc;
+  --cast-line: rgba(233, 190, 98, .42);
+  --cast-line-dim: rgba(164, 203, 241, .2);
+  --cast-shadow: rgba(0, 0, 0, .7);
+  --cast-font-display: Georgia, "Yu Mincho", serif;
+  align-items: stretch;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  background: var(--cast-ink);
+  overflow: hidden;
+}
+
+.cast-box,
+.help-box {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 1180px);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  border: 1px solid var(--cast-line);
+  border-radius: 16px;
+  background: linear-gradient(160deg, var(--cast-ink-glass), var(--cast-ink-deep));
+  box-shadow: 0 24px 70px var(--cast-shadow), inset 0 1px rgba(255, 239, 191, .12);
+  overflow: hidden;
+}
+
+.cast-head,
+.help-head {
+  flex: none;
+  padding: 12px 18px 8px;
+  border-bottom: 1px solid var(--cast-line-dim);
+  text-align: center;
+}
+.cast-kicker { color: var(--cast-gold); font-size: 9px; letter-spacing: 2.4px; opacity: .9; }
+.cast-head h2,
+.help-head h2 {
+  margin: 2px 0 0;
+  font: 700 22px/1.2 var(--cast-font-display);
+  letter-spacing: 6px;
+  text-indent: 6px;
+  background: linear-gradient(180deg, var(--cast-gold-hi), #d4af37);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.cast-head p { margin: 4px 0 0; color: var(--cast-muted); font-size: 12px; }
+
+/* ---------- 席3つ ---------- */
+.cast-seats {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 14px 8px;
+}
+.cast-seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 6px 10px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 12px;
+  background: var(--cast-panel);
+  color: var(--cast-copy);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.cast-seat:hover { border-color: var(--cast-line); }
+.cast-seat.active {
+  border-color: var(--cast-gold);
+  background: var(--cast-panel-hi);
+  box-shadow: 0 0 0 1px var(--cast-gold) inset, 0 8px 22px rgba(0, 0, 0, .45);
+}
+.cast-seat.active .cast-seat-copy small { color: var(--cast-gold-hi); }
+.cast-seat-copy { display: flex; flex-direction: column; min-width: 0; }
+.cast-seat-copy small { color: var(--cast-muted); font-size: 10px; letter-spacing: 1px; }
+.cast-seat-copy strong { color: var(--cast-ivory); font-size: 14px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.cast-face {
+  flex: none;
+  display: inline-block;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--cast-gold-low);
+  background: #10203a center / cover no-repeat;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .5);
+}
+
+/* ---------- 本体: 格子 + 紹介 ---------- */
+.cast-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .95fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  padding: 0 14px 8px;
+}
+
+.cast-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: max-content;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cast-gold-low) transparent;
+}
+.cast-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 12px;
+  background: var(--cast-panel);
+  color: var(--cast-copy);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .18s ease, transform .18s ease, background .18s ease;
+}
+.cast-card:hover { border-color: var(--cast-line); transform: translateY(-2px); }
+.cast-card.shown { border-color: var(--cast-gold); background: var(--cast-panel-hi); }
+.cast-card.assigned .cast-face { border-color: var(--cast-gold-hi); box-shadow: 0 0 0 2px rgba(233, 190, 98, .35), 0 3px 10px rgba(0, 0, 0, .5); }
+.cast-card .cast-face { width: 64px; height: 64px; }
+.cast-card-name { color: var(--cast-ivory); font-size: 13px; line-height: 1.2; text-align: center; }
+.cast-card-sub { color: var(--cast-muted); font-size: 10px; line-height: 1.3; text-align: center; }
+.cast-card.locked { color: var(--cast-muted); }
+.cast-card.locked .cast-face { filter: grayscale(1) brightness(.35) contrast(.9); border-color: rgba(145, 165, 188, .35); }
+.cast-card.locked .cast-card-name { color: var(--cast-muted); letter-spacing: 2px; }
+.cast-card.locked .cast-card-sub { color: var(--cast-gold); }
+.cast-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--cast-gold-hi), var(--cast-gold));
+  color: #2b1d05;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .5px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .5);
+}
+
+.cast-detail {
+  display: grid;
+  grid-template-columns: minmax(120px, 42%) minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  padding: 12px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(20, 44, 74, .5), rgba(5, 12, 24, .7));
+  overflow: hidden;
+}
+.cast-portrait {
+  min-height: 0;
+  border-radius: 10px;
+  border: 1px solid var(--cast-line);
+  background: #0c1a30 center top / cover no-repeat;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 239, 191, .08);
+}
+.cast-portrait.locked { filter: grayscale(1) brightness(.22); }
+.cast-detail-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.cast-detail-name {
+  margin: 0;
+  color: var(--cast-ivory);
+  font: 700 20px/1.2 var(--cast-font-display);
+  letter-spacing: 1px;
+}
+.cast-detail-name small { display: block; margin-top: 2px; color: var(--cast-muted); font: 400 10px/1.3 system-ui, sans-serif; letter-spacing: 1.5px; }
+.cast-detail-title { margin: 2px 0 0; color: var(--cast-gold); font-size: 12px; letter-spacing: 1px; }
+.cast-quote { margin: 0; color: var(--cast-gold-hi); font-size: 13px; line-height: 1.5; font-family: var(--cast-font-display); }
+.cast-intro { margin: 0; color: var(--cast-copy); font-size: 12.5px; line-height: 1.7; }
+.cast-axes {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .25);
+}
+.cast-axes dt { color: var(--cast-muted); font-size: 11px; letter-spacing: 1px; }
+.cast-axes dd { display: flex; gap: 4px; margin: 0; }
+.cast-axes dd i { width: 18px; height: 7px; border-radius: 2px; background: rgba(145, 165, 188, .22); }
+.cast-axes dd i.on { background: linear-gradient(180deg, var(--cast-gold-hi), var(--cast-gold)); box-shadow: 0 0 6px rgba(233, 190, 98, .45); }
+.cast-assign { margin: auto 0 0; padding: 10px; font-size: 14px; }
+.cast-assign:disabled { opacity: .6; cursor: default; }
+
+.cast-foot,
+.help-foot {
+  flex: none;
+  padding: 6px 14px 10px;
+  border-top: 1px solid var(--cast-line-dim);
+}
+.cast-foot .btn,
+.help-foot .btn { margin: 0; }
+
+/* タイトル側のボタン要約 */
+#screen-title .cast-button { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+#screen-title .cast-button small { color: var(--title-muted, #91a5bc); font-size: 11px; letter-spacing: .5px; }
+
+/* ---------- 短辺: 縦持ちスマホ(幅600px未満は縦積み。紹介パネルは固定高で上、格子は下でスクロール) ---------- */
+@media (max-width: 599px) {
+  .cast-main { grid-template-columns: minmax(0, 1fr); grid-template-rows: clamp(150px, 40%, 320px) minmax(0, 1fr); }
+  .cast-detail { order: -1; grid-template-columns: 96px minmax(0, 1fr); padding: 10px; }
+  .cast-portrait { min-height: 0; }
+  .cast-intro { font-size: 12px; line-height: 1.6; }
+  .cast-axes { padding: 6px 8px; }
+  .cast-card .cast-face { width: 52px; height: 52px; }
+  .cast-seats { padding: 8px 10px 6px; gap: 6px; }
+  .cast-seat { min-height: 50px; padding: 5px 8px; gap: 8px; }
+  .cast-seat .cast-face { width: 36px; height: 36px; }
+  .cast-seat-copy strong { font-size: 12px; }
+  .cast-head h2 { font-size: 18px; }
+}
+/* 600〜760px(タブレット縦・横持ちスマホ): 二列のまま紹介パネルを細める */
+@media (min-width: 600px) and (max-width: 760px) {
+  .cast-main { grid-template-columns: minmax(0, 1fr) minmax(250px, 42%); }
+  .cast-detail { grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); padding: 10px; }
+  .cast-card .cast-face { width: 52px; height: 52px; }
+}
+@media (max-width: 400px) {
+  .cast-seat-copy small { display: none; }
+  .cast-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .cast-card { padding: 8px 4px 6px; }
+  .cast-card-name { font-size: 12px; }
+}
+/* 横持ちの短い画面(667×375等): ヘッダを詰めて格子を確保 */
+@media (max-height: 420px) {
+  .cast-head { padding: 6px 14px 4px; }
+  .cast-head p { display: none; }
+  .cast-kicker { display: none; }
+  .cast-seats { padding: 6px 12px 4px; }
+  .cast-seat { min-height: 44px; }
+  .cast-card .cast-face { width: 44px; height: 44px; }
+  .cast-card { padding: 6px 4px 5px; }
+  .cast-foot { padding: 4px 12px 6px; }
+  .cast-foot .btn { min-height: 44px; padding: 8px; font-size: 14px; }
+}

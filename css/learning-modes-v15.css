@@ -146,9 +146,15 @@
   background-size: cover;
   box-shadow: 0 3px 10px var(--learn-shadow);
 }
-.thought-avatar.hanzou { background-image: url('../assets/gptimage_v1/hanzou_portrait_v1.png'); }
-.thought-avatar.joe { background-image: url('../assets/gptimage_v1/joe_portrait_v1.png'); }
-.thought-avatar.himeko { background-image: url('../assets/gptimage_v1/himeko_portrait_v1.png'); }
+.thought-avatar.hyogo { background-image: url('../assets/characters_v2/hyogo_face.webp'); background-position: center; }
+.thought-avatar.daisuke { background-image: url('../assets/characters_v2/daisuke_face.webp'); background-position: center; }
+.thought-avatar.rarapi { background-image: url('../assets/characters_v2/rarapi_face.webp'); background-position: center; }
+.thought-avatar.ran { background-image: url('../assets/characters_v2/ran_face.webp'); background-position: center; }
+.thought-avatar.toma { background-image: url('../assets/characters_v2/toma_face.webp'); background-position: center; }
+.thought-avatar.lime { background-image: url('../assets/characters_v2/lime_face.webp'); background-position: center; }
+.thought-avatar.ronbolt { background-image: url('../assets/characters_v2/ronbolt_face.webp'); background-position: center; }
+.thought-avatar.wanfu { background-image: url('../assets/characters_v2/wanfu_face.webp'); background-position: center; }
+.thought-avatar.sawaka { background-image: url('../assets/characters_v2/sawaka_face.webp'); background-position: center; }
 
 .thought-copy { min-width: 0; padding: 10px 12px 9px; text-align: left; }
 .thought-copy > strong {

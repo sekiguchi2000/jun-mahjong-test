@@ -29,15 +29,16 @@ body {
 .opponent-portrait, .avatar { display: inline-block; background-position: center 22%; background-size: cover; background-repeat: no-repeat; }
 .opponent-portrait { width: 60px; height: 60px; border-radius: 50%; margin-left: -8px; border: 2px solid #d6b65c; box-shadow: 0 4px 12px rgba(0,0,0,.55); }
 .opponent-portrait:first-child { margin-left: 0; }
-.hanzou { background-image: url('../assets/gptimage_v1/hanzou_portrait_v1.png'); }
-.joe { background-image: url('../assets/gptimage_v1/joe_portrait_v1.png'); }
-.himeko { background-image: url('../assets/gptimage_v1/himeko_portrait_v1.png'); }
-.mamoru { background-image: url('../assets/gptimage_v9/mamoru_portrait_v2.png'); }
-.seitaro { background-image: url('../assets/gptimage_v9/seitaro_portrait_v1.png'); }
-.gouda { background-image: url('../assets/gptimage_v9/gouda_portrait_v2.png'); }
-.daisuke { background-image: url('../assets/gptimage_v9/daisuke_portrait_v1.png'); }
-.chen { background-image: url('../assets/gptimage_v9/chen_portrait_v1.png'); }
-.sawaka { background-image: url('../assets/gptimage_v9/sawaka_portrait_v2.png'); }
+/* v121 新キャスト: 顔アイコンは正方形クロップ(characters_v2/*_face.webp) */
+.hyogo { background-image: url('../assets/characters_v2/hyogo_face.webp'); background-position: center; }
+.daisuke { background-image: url('../assets/characters_v2/daisuke_face.webp'); background-position: center; }
+.rarapi { background-image: url('../assets/characters_v2/rarapi_face.webp'); background-position: center; }
+.ran { background-image: url('../assets/characters_v2/ran_face.webp'); background-position: center; }
+.toma { background-image: url('../assets/characters_v2/toma_face.webp'); background-position: center; }
+.lime { background-image: url('../assets/characters_v2/lime_face.webp'); background-position: center; }
+.ronbolt { background-image: url('../assets/characters_v2/ronbolt_face.webp'); background-position: center; }
+.wanfu { background-image: url('../assets/characters_v2/wanfu_face.webp'); background-position: center; }
+.sawaka { background-image: url('../assets/characters_v2/sawaka_face.webp'); background-position: center; }
 .note { color: #7fa896; margin-top: 28px; font-size: 11px; line-height: 1.7; }
 
 .btn {
