@@ -9,9 +9,9 @@ import {
   pickSafeTileDetailed,
   remainingCopies,
   visibleCounts,
-} from './decision-evaluator.js?v=19';
+} from './decision-evaluator.js?v=20';
 
-export { AI_STYLES, DecisionEvaluator, isForbiddenLastPlaceWin } from './decision-evaluator.js?v=19';
+export { AI_STYLES, DecisionEvaluator, isForbiddenLastPlaceWin } from './decision-evaluator.js?v=20';
 
 export class ComActor {
   constructor(name = 'COM', profile = 'analyst') {

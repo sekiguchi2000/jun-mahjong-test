@@ -17,7 +17,7 @@ import {
   hiddenUraIndicatorCount,
   scorePublicWinUraRange,
 } from './win-uncertainty.js';
-import { DECISION_EVALUATOR_VERSION } from './decision-evaluator.js?v=19';
+import { DECISION_EVALUATOR_VERSION } from './decision-evaluator.js?v=20';
 import { DecisionLog } from './decision-log.js';
 import { captureSessionSnapshot, resolveReplayChoice } from './session-snapshot.js';
 import {

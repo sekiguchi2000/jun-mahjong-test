@@ -3,7 +3,7 @@ import { makeRules, RULE_SCHEMA } from '../engine/rules.js';
 import {
   Game, GameCancelledError, availableAnkanKinds, availableKakanKinds,
 } from '../engine/game.js?v=20';
-import { ComActor } from '../engine/ai.js?v=19';
+import { ComActor } from '../engine/ai.js?v=20';
 import { canDeclareRiichi } from '../engine/legal-actions.js';
 import { createDealerCeremony } from '../engine/opening-dealer.js?v=17';
 import { toCounts, suitOf, tileName, doraFromIndicator } from '../engine/tiles.js';
@@ -27,8 +27,8 @@ import {
   writeAudioPreferences,
   writeLearningModePreferences,
 } from '../platform/desktop-settings.js?v=17';
-import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=5';
-import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=19';
+import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=6';
+import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=20';
 import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=3';
 import { createCharacterSelect } from './character-select.js?v=1';
 import { createHelpScreen } from './help-screen.js?v=1';

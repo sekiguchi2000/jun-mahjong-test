@@ -18,8 +18,12 @@ import { shanten } from './shanten.js';
 import { canDeclareRiichi } from './legal-actions.js';
 import { evaluateHandPlans, tileRetentionValue, PLAN_SCALE, decomposeBlocks } from './hand-plans.js';
 import { readThreats, handProspect, placementCushion, pushScales, estimateOpenThreat } from './threat-read.js';
+import { scoreWin } from './score.js';
+import { makeRules } from './rules.js';
+// 見返り計算用の既定ルール(点数表は共通。切り上げ満貫等の差は見返りの目安には影響しない)
+const RULES_FOR_VALUE = makeRules();
 
-export const DECISION_EVALUATOR_VERSION = 'v18-candidate-comparison-1';
+export const DECISION_EVALUATOR_VERSION = 'v20-tenpai-real-value-1';
 
 export const AI_STYLES = Object.freeze({
   // cautionWeight: リーチ未満の「テンパイ気配」への警戒の強さ(キャラ差は重みだけ)
@@ -1287,35 +1291,71 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst', hi
     // テンパイ時は待ちの実live枚数を数える(v91: 定数近似からの置き換え)。
     // 最良の打牌を選んだときの待ちで評価する
     let liveWaitsEstimate = 5;
+    // EV監査2号 (2026-09-03): テンパイ手の見返りは「2600+ドラ×1400」の定数近似でなく、
+    // 実際の役・符・ドラで点数計算する(公開情報のみ: 裏ドラ/一発は含めない。門前なら
+    // リーチ宣言込み)。#g163-p25664では混一色+中+自風の8000点手が3900点扱いで安手降りに
+    // なっていた。待ちごとの点数を残り枚数で加重平均し、最良の打牌(live最大)で評価する
+    let tenpaiValueEstimate = null;
     if (currentShanten === 0) {
       const visibleForProspect = visibleCounts(view);
       const counts14 = toCounts(handAll);
+      const winCtxBase = {
+        melds: view.melds ?? [], tsumo: false,
+        riichi: view.riichi === true || meldCount === 0, doubleRiichi: false, ippatsu: false,
+        rinshan: false, chankan: false, haitei: false, houtei: false, tenhou: false, chihou: false,
+        seatWind: view.seatWind, roundWind: view.roundWind,
+        doraIndicators: (view.public?.doraIndicators ?? []).map(tile => tile.kind),
+        uraIndicators: [],
+      };
+      const winExtra = { isDealer: view.isDealer === true, honba: 0, riichiSticks: 0 };
       let bestLive = 0;
+      let bestValue = 0;
       for (let discardKind = 0; discardKind < KIND_COUNT; discardKind++) {
         if (counts14[discardKind] === 0) continue;
         counts14[discardKind]--;
         if (shanten(counts14, meldCount) === 0) {
+          const discardIndex = handAll.findIndex(tile => tile.kind === discardKind && !tile.red);
+          const hand13 = handAll.filter((tile, index) => index !== (discardIndex >= 0 ? discardIndex : handAll.findIndex(tile2 => tile2.kind === discardKind)));
           let live = 0;
+          let weightedValue = 0;
           for (let waitKind = 0; waitKind < KIND_COUNT; waitKind++) {
             if (counts14[waitKind] >= 4) continue;
             counts14[waitKind]++;
-            if (shanten(counts14, meldCount) === -1) live += remainingCopies(visibleForProspect, waitKind);
+            if (shanten(counts14, meldCount) === -1) {
+              const copies = remainingCopies(visibleForProspect, waitKind);
+              live += copies;
+              if (copies > 0) {
+                let score = null;
+                try {
+                  score = scoreWin({ ...winCtxBase, hand: hand13, winTile: { kind: waitKind, red: false } }, RULES_FOR_VALUE, winExtra);
+                } catch { score = null; }
+                weightedValue += copies * (score?.handTotal ?? 0);
+              }
+            }
             counts14[waitKind]--;
           }
-          bestLive = Math.max(bestLive, live);
+          const value = live > 0 ? Math.round(weightedValue / live) : 0;
+          if (live > bestLive || (live === bestLive && value > bestValue)) {
+            bestLive = live;
+            bestValue = value;
+          }
         }
         counts14[discardKind]++;
       }
       liveWaitsEstimate = bestLive;
+      tenpaiValueEstimate = bestValue;
     }
-    const prospect = handProspect({
-      shanten: currentShanten,
-      liveWaits: liveWaitsEstimate,
-      remaining: view.public?.remaining,
-      valueTiles: ownValueTiles,
-      menzen: meldCount === 0,
-      pot: (view.public?.riichiSticks ?? 0) * 1000 + (view.public?.honba ?? 0) * 300,
-    });
+    const prospect = {
+      ...handProspect({
+        shanten: currentShanten,
+        liveWaits: liveWaitsEstimate,
+        remaining: view.public?.remaining,
+        valueTiles: ownValueTiles,
+        menzen: meldCount === 0,
+        pot: (view.public?.riichiSticks ?? 0) * 1000 + (view.public?.honba ?? 0) * 300,
+      }),
+      tenpaiValue: tenpaiValueEstimate,
+    };
     const cushion = placementCushion(view, read?.expectedLoss ?? 5200);
     const scales = pushScales(read, cushion, prospect);
     // threatScale/cheapScaleは互換名を維持しつつ、中身を読みベースへ置換
@@ -1560,12 +1600,21 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst', hi
   // 「ここぞ」の例外(2026-09-01ユーザー裁定): 順位を上げなければならない土壇場だけは
   // 安手テンパイでも押してよい(バランスが突っ張るのはここぞだけ、の裏面)
   const rankUpUrgency = view.placement?.mustPrioritizeRankUp === true;
-  const cheapTenpaiFold = (style.tenpaiFoldValue ?? 0) > 0 && !style.ignoreRisk &&
+  const cheapTenpaiFoldWanted = (style.tenpaiFoldValue ?? 0) > 0 && !style.ignoreRisk &&
     !rankUpUrgency &&
     threats.length > 0 && currentShanten === 0 &&
     context.threatValue?.read && context.threatValue.read.band !== 'cheap' &&
-    ((context.threatValue.prospect?.value ?? 0) + (context.threatValue.prospect?.pot ?? 0))
-      <= style.tenpaiFoldValue;
+    ((context.threatValue.prospect?.tenpaiValue ?? context.threatValue.prospect?.value ?? 0) +
+      (context.threatValue.prospect?.pot ?? 0)) <= style.tenpaiFoldValue;
+  // EV監査2号 (2026-09-03 バッチ第1回 #g163-p25664): 通せる安全牌が今切る1枚しか無い手で
+  // 安手テンパイ降りを選ぶと、次巡から無筋を切らされ「降り線の放銃率(55%)が押し線(47%)
+  // より高い」倒錯になった(EV差-1029)。降り切れない降りはしない=逃げ道(完全安全牌)が
+  // 2枚以上あるときだけ安手テンパイを降りる。逃げ道が無ければテンパイのまま押す
+  const safeRunway = cheapTenpaiFoldWanted
+    ? handAll.filter(tile => (assessTileSafety(tile.kind, threats, visible)?.maxRisk ?? 1) === 0).length
+    : 0;
+  const cheapTenpaiFold = cheapTenpaiFoldWanted && safeRunway >= 2;
+  const cheapTenpaiPushNoRunway = cheapTenpaiFoldWanted && !cheapTenpaiFold;
   if (cheapTenpaiFold) effectiveFoldAt = 0;
   if (threats.length > 0 && currentShanten >= effectiveFoldAt && !view.riichi) {
     const safeChoice = pickSafeTileDetailed(handAll, threats, view, discardCandidates);
@@ -1602,7 +1651,7 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst', hi
       if (cheapTenpaiFold) {
         decisiveFactors.push({
           code: 'CHEAP_TENPAI_FOLD',
-          value: context.threatValue?.prospect?.value ?? 0,
+          value: context.threatValue?.prospect?.tenpaiValue ?? context.threatValue?.prospect?.value ?? 0,
           pot: context.threatValue?.prospect?.pot ?? 0,
           expectedLoss: context.threatValue?.read?.expectedLoss ?? null,
         });
@@ -1693,6 +1742,14 @@ export function evaluateTurnDecision(view, options = [], profile = 'analyst', hi
     }
   }
 
+  if (cheapTenpaiPushNoRunway && !decisiveFactors.some(factor => factor.code === 'FOLD_ON_RIICHI_THREAT')) {
+    decisiveFactors = [{
+      code: 'CHEAP_TENPAI_PUSH_NO_RUNWAY',
+      safeRunway,
+      value: context.threatValue?.prospect?.tenpaiValue ?? context.threatValue?.prospect?.value ?? 0,
+      pot: context.threatValue?.prospect?.pot ?? 0,
+    }, ...decisiveFactors];
+  }
   return finalizeAnalysis({
     profile: normalizedProfile,
     phase: legacyTrace.phase,

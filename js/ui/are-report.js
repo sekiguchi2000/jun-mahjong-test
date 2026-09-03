@@ -5,7 +5,7 @@
 // そのまま局面カルテ(tests/test_ai_karte.mjs)のfixtureになる。
 // 記録するのは本人に見えている情報(自分の手牌+公開情報)だけ。
 
-import { DECISION_EVALUATOR_VERSION } from '../engine/decision-evaluator.js?v=19';
+import { DECISION_EVALUATOR_VERSION } from '../engine/decision-evaluator.js?v=20';
 
 const STORAGE_KEY = 'jun-are-reports-v1';
 const MAX_REPORTS = 60;

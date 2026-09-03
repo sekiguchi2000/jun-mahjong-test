@@ -2,7 +2,7 @@
 //
 // 入力はユーザーにも見えている view / offer だけ。山の順番、他家の手牌、
 // 王牌の未公開部分は読まず、DecisionEvaluator の分析結果だけを文章化する。
-import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=19';
+import { evaluateTurnDecision, evaluateClaimDecision } from './decision-evaluator.js?v=20';
 import { isDragon, isHonor, numOf, doraFromIndicator, tileName, toCounts } from './tiles.js';
 import { decomposeBlocks, evaluateHandPlans, tileRetentionValue } from './hand-plans.js';
 import { describeThreatRead, describeCushion } from './threat-read.js';
@@ -1078,6 +1078,13 @@ function turnExplanationParts(view, analysis) {
       const loss = foldFact?.expectedLoss;
       const styleVoice = analysis?.profile === 'defense' ? '守り思考の真骨頂です。' : '';
       sentences.push(`テンパイですが、この手の見返りは${gain}点ほどで、${threatNoun}に無筋を押して${loss ? `${loss}点級の` : ''}放銃と引き換えにする価値がありません。${styleVoice}テンパイに未練を残さず、安全な牌から切って守ります。`);
+    } else if (factors.has('CHEAP_TENPAI_PUSH_NO_RUNWAY')) {
+      // EV監査2号: 逃げ道(完全安全牌)が今の1枚しか無い安手テンパイは降りずに押す。
+      // 「降り切れない降り」は押しより損だとロールアウトで実測(#g163-p25664)
+      const pushFact = (analysis?.decisiveFactors ?? []).find(factor => factor.code === 'CHEAP_TENPAI_PUSH_NO_RUNWAY');
+      const gain = (pushFact?.value ?? 0) + (pushFact?.pot ?? 0);
+      const runway = pushFact?.safeRunway ?? 0;
+      sentences.push(`テンパイで、見返りは${gain}点ほどと大きくありません。ただ、この${threatNoun}に通せる安全牌が${runway ? `${runway}枚` : '手に無く'}${runway ? 'しかなく' : ''}、今降りても次の巡から無筋を切らされます。降り切れない降りは押すより損なので、この局はテンパイのまま押します。`);
     } else if (factors.has('MAWASHI_SAFE_ADVANCE')) {
       // 選んだ牌に安全根拠が無いのに「通っている牌で回す」と言わない(2026-08-22ペルソナ検品)
       const mawashiTile = tileAt(view, action.index);
