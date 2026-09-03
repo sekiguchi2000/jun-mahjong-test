@@ -100,7 +100,8 @@ export function characterById(id) {
   return COM_CHARACTERS.find(character => character.id === id) ?? null;
 }
 
-export const DEFAULT_OPPONENTS = Object.freeze(['hyogo', 'daisuke', 'rarapi']);
+// 2026-09-03 ユーザー指示: 小森ダイスケ(ギャンブラー)はLv21解禁、ロンボルト(効率マシン)が既定
+export const DEFAULT_OPPONENTS = Object.freeze(['hyogo', 'ronbolt', 'rarapi']);
 
 export const CHARACTER_ASSET_DIR = 'assets/characters_v2';
 export function characterFaceSrc(character) { return `${CHARACTER_ASSET_DIR}/${character.portrait}_face.webp`; }

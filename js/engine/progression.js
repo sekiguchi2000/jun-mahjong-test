@@ -58,7 +58,7 @@ export const UNLOCKS = Object.freeze([
   { level: 7, kind: 'guide', value: 'efficiency', label: '打ち手ガイド「効率」' },
   { level: 10, kind: 'rule', key: 'kazoeYakuman', value: true, label: '数え役満設定' },
   { level: 15, kind: 'rule', key: 'gameLength', value: 'tonpuu', label: '東風戦' },
-  { level: 21, kind: 'com', value: 'ronbolt', label: 'COM新キャラ「ロンボルト」' },
+  { level: 21, kind: 'com', value: 'daisuke', label: 'COM新キャラ「小森ダイスケ」' },
   { level: 28, kind: 'guide', value: 'attack', label: '打ち手ガイド「攻め」' },
   { level: 38, kind: 'rule', key: 'gameLength', value: 'issou', label: '一荘戦' },
   { level: 50, kind: 'rule', key: 'akaDora', value: 4, label: '赤ドラ4枚設定' },

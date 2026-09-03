@@ -4,7 +4,7 @@
 // 紹介パネルはスクロールさせない(傾向ゲージは出さない)。
 // ロジックは持たない: 選択結果は onChange で呼び出し側(main.js)へ返すだけ。
 
-import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc } from '../engine/com-characters.js?v=5';
+import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc } from '../engine/com-characters.js?v=6';
 
 export const SEAT_NAMES = Object.freeze(['右の相手', '正面の相手', '左の相手']);
 export const SEAT_SHORT = Object.freeze(['右', '正面', '左']);

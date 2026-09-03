@@ -29,15 +29,15 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=6';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=20';
-import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS, characterFullSrc } from '../engine/com-characters.js?v=5';
-import { createCharacterSelect } from './character-select.js?v=3';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS, characterFullSrc } from '../engine/com-characters.js?v=6';
+import { createCharacterSelect } from './character-select.js?v=4';
 import { playRiichiCinematic, buildWinCinematic, playResultReveal } from './cinematics.js?v=1';
 import { createHelpScreen } from './help-screen.js?v=2';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
   clampRulesToLevel, ruleValueUnlockLevel, achievementRows, UNLOCKS,
-} from '../engine/progression.js?v=1';
+} from '../engine/progression.js?v=2';
 import { areReportCount, captureAreReport, exportAreReports } from './are-report.js?v=2';
 import { StatsTracker, loadGameRecords, summarizeStats, clearGameRecords } from './stats-store.js?v=1';
 import { GAMEPAD_EVENTS, installGamepadController } from './gamepad-controller.js?v=17';
@@ -315,11 +315,11 @@ class PacedCom extends ComActor {
 
 // ============ UI本体 ============
 const WIND_NAMES = ['東', '南', '西', '北'];
-let SEAT_LABELS = ['あなた', '権藤兵吾', '小森ダイスケ', 'ララピ'];
+let SEAT_LABELS = ['あなた', '権藤兵吾', 'ロンボルト', 'ララピ'];
 let SEAT_TAGLINES = ['あなたの手番', '守備型・危険牌を切らない', '効率型・受入枚数を最大化', '攻撃型・鳴いて速度を上げる'];
 let COM_PROFILES = [null, 'guardian', 'analyst', 'striker'];
-let SEAT_PORTRAITS = [null, 'hyogo', 'daisuke', 'rarapi'];
-let SEAT_VOICES = [null, 'hanzo', 'joe', 'himeko'];
+let SEAT_PORTRAITS = [null, 'hyogo', 'ronbolt', 'rarapi'];
+let SEAT_VOICES = [null, 'hanzo', null, 'himeko'];
 let SEAT_CHARACTERS = [null, null, null, null];
 
 // 対戦相手の選択(拡張可能なCOMキャラレジストリから3席分)
