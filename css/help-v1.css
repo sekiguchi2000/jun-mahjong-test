@@ -100,3 +100,50 @@
   .help-foot { padding: 4px 12px 6px; }
   .help-foot .btn { min-height: 44px; padding: 8px; font-size: 14px; }
 }
+
+/* ---------- v2: 牌の絵つき(役の例・用語) ---------- */
+.help-tiles { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 6px; }
+.help-tiles-label { color: var(--cast-muted); font-size: 11px; margin-right: 2px; }
+.help-tile-group { display: inline-flex; gap: 2px; }
+.help-tile {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 41px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #fffdf6, #efe6d2);
+  border: 1px solid #c9b993;
+  border-bottom-width: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .45);
+}
+.help-tile svg { width: 84%; height: 86%; display: block; }
+.help-tile.side { transform: rotate(90deg) translateY(-4px); margin: 0 6px; }
+.help-tile.back { background: linear-gradient(180deg, #2e5f8f, #163a5e); border-color: #0f2740; }
+.help-tiles.sm .help-tile { width: 24px; height: 33px; border-bottom-width: 2px; }
+.help-tiles.xs .help-tile { width: 18px; height: 25px; border-bottom-width: 2px; border-radius: 3px; }
+.help-tiles.xs, .help-tiles.sm { margin-top: 4px; }
+.help-table td.tiles-cell { padding-top: 4px; padding-bottom: 4px; }
+.help-table td.tiles-cell .help-tiles { margin: 0; }
+
+.yaku-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+.yaku-row {
+  padding: 10px 12px;
+  border: 1px solid var(--cast-line-dim);
+  border-radius: 12px;
+  background: var(--cast-panel);
+}
+.yaku-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 8px; }
+.yaku-head .yaku-name { color: var(--cast-ivory); font-size: 14px; }
+.yaku-head .yaku-han { color: var(--cast-gold-hi); font-weight: 700; font-size: 12px; }
+.yaku-row .yaku-how { margin: 4px 0 0; color: var(--cast-copy); font-size: 12.5px; }
+.yaku-row .yaku-note { display: block; margin-top: 4px; color: var(--cast-muted); font-size: 11px; }
+.yaku-row .yaku-note.rule-note { color: var(--cast-gold); }
+.help-cards.glossary .help-card h3 small { margin-left: 8px; color: var(--cast-muted); font: 400 11px/1 system-ui, sans-serif; letter-spacing: 1px; }
+.fu-example { padding: 8px 10px; margin-bottom: 8px; border: 1px solid var(--cast-line-dim); border-radius: 10px; background: var(--cast-panel); }
+.fu-example p { margin: 0; }
+.fu-example-hand { color: var(--cast-copy); font-size: 12.5px; }
+.fu-example-calc { color: var(--cast-gold-hi); font-weight: 700; font-size: 13px; margin-top: 2px; }
+.help-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); width: min(100%, 640px); }
+@media (max-width: 520px) {
+  .help-tab { font-size: 11px; padding: 7px 2px; }
+  .help-tiles.sm .help-tile { width: 20px; height: 28px; }
+  .yaku-list { grid-template-columns: minmax(0, 1fr); }
+}

@@ -1,14 +1,16 @@
-// help-screen.js — ヘルプ画面 (v1 / 2026-09-03)
-// 遊び方 / 役一覧 / 符計算 / 点数早見 の4タブ。データは engine/yaku-guide.js。
-// ルール依存の項目には現在のルール設定を添える。
+// help-screen.js — ヘルプ画面 (v2 / 2026-09-03)
+// 遊び方 / 用語 / 役一覧 / 符計算 / 点数表 の5タブ。データは engine/yaku-guide.js。
+// 役と用語には牌の絵(tilesvg)で例を添える。ルール依存の項目には現在の設定を添える。
 
 import {
-  YAKU_GROUPS, FU_RULES, SCORE_RULES, HOW_TO_PLAY,
+  YAKU_GROUPS, FU_RULES, SCORE_RULES, HOW_TO_PLAY, GLOSSARY,
   ronPoints, SCORE_TABLE_FU, SCORE_TABLE_HAN,
-} from '../engine/yaku-guide.js?v=1';
+} from '../engine/yaku-guide.js?v=2';
+import { svgFace } from './tilesvg.js?v=10';
 
 const TABS = Object.freeze([
   { key: 'howto', label: '遊び方' },
+  { key: 'glossary', label: '用語' },
   { key: 'yaku', label: '役一覧' },
   { key: 'fu', label: '符計算' },
   { key: 'score', label: '点数表' },
@@ -19,6 +21,26 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+// 牌の絵。groups = [[kind, ...], ...] 面子ごとに間を空ける。'|' 相当は配列の切れ目
+export function tileRow(groups, { size = 'md', label = '' } = {}) {
+  const row = el('div', `help-tiles ${size}`);
+  if (label) row.appendChild(el('span', 'help-tiles-label', label));
+  for (const group of groups) {
+    const box = el('span', 'help-tile-group');
+    for (const spec of group) {
+      const kind = typeof spec === 'number' ? spec : spec.kind;
+      const red = typeof spec === 'object' && spec.red === true;
+      const tile = el('span', 'help-tile');
+      if (typeof spec === 'object' && spec.back) { tile.classList.add('back'); }
+      else tile.innerHTML = svgFace(kind, red);
+      if (typeof spec === 'object' && spec.side) tile.classList.add('side');
+      box.appendChild(tile);
+    }
+    row.appendChild(box);
+  }
+  return row;
 }
 
 function ruleNote(rules, key) {
@@ -34,6 +56,20 @@ export function renderHowTo() {
   for (const item of HOW_TO_PLAY) {
     const card = el('section', 'help-card');
     card.append(el('h3', '', item.title), el('p', '', item.body));
+    if (item.tiles) card.appendChild(tileRow(item.tiles, { size: 'sm' }));
+    list.appendChild(card);
+  }
+  return list;
+}
+
+export function renderGlossary() {
+  const list = el('div', 'help-cards glossary');
+  for (const item of GLOSSARY) {
+    const card = el('section', 'help-card');
+    const head = el('h3', '', item.term);
+    if (item.kana) head.appendChild(el('small', '', item.kana));
+    card.append(head, el('p', '', item.body));
+    if (item.tiles) card.appendChild(tileRow(item.tiles, { size: 'sm' }));
     list.appendChild(card);
   }
   return list;
@@ -41,38 +77,30 @@ export function renderHowTo() {
 
 export function renderYaku(rules) {
   const wrap = el('div', 'help-yaku');
+  wrap.appendChild(el('p', 'help-legend', '門前=鳴くと成立しない。喰い下がり=鳴くと1翻下がる。例の牌は一例です。'));
   for (const group of YAKU_GROUPS) {
     const section = el('section', 'help-group');
     section.appendChild(el('h3', '', group.title));
-    const table = el('table', 'help-table yaku-table');
-    const thead = el('thead');
-    const hr = el('tr');
-    hr.append(el('th', '', '役'), el('th', 'num', '翻'), el('th', '', '作り方'));
-    thead.appendChild(hr);
-    const tbody = el('tbody');
+    const list = el('div', 'yaku-list');
     for (const item of group.items) {
-      const tr = el('tr');
-      const nameCell = el('td', 'yaku-name');
-      nameCell.appendChild(el('strong', '', item.name));
-      const tags = el('span', 'yaku-tags');
-      if (item.menzen) tags.appendChild(el('i', 'tag menzen', '門前'));
-      if (item.kuisagari) tags.appendChild(el('i', 'tag kui', '喰い下がり'));
-      if (tags.childElementCount) nameCell.appendChild(tags);
-      const han = el('td', 'num', item.yakuman ? '役満' : `${item.han}${item.kuisagari ? '→' + (item.han - 1) : ''}`);
-      const how = el('td', 'yaku-how');
-      how.appendChild(el('span', '', item.how));
-      if (item.note) how.appendChild(el('small', '', item.note));
+      const row = el('article', 'yaku-row');
+      const head = el('div', 'yaku-head');
+      const name = el('strong', 'yaku-name', item.name);
+      const han = el('span', 'yaku-han', item.yakuman ? '役満' : `${item.han}翻${item.kuisagari ? `（鳴くと${item.han - 1}翻）` : ''}`);
+      head.append(name, han);
+      if (item.menzen) head.appendChild(el('i', 'tag menzen', '門前'));
+      if (item.kuisagari) head.appendChild(el('i', 'tag kui', '喰い下がり'));
+      const how = el('p', 'yaku-how', item.how);
+      row.append(head, how);
+      if (item.example) row.appendChild(tileRow(item.example, { size: 'sm' }));
+      if (item.note) row.appendChild(el('small', 'yaku-note', item.note));
       const rn = item.rule ? ruleNote(rules, item.rule) : '';
-      if (rn) how.appendChild(el('small', 'rule-note', rn));
-      tr.append(nameCell, han, how);
-      tbody.appendChild(tr);
+      if (rn) row.appendChild(el('small', 'yaku-note rule-note', rn));
+      list.appendChild(row);
     }
-    table.append(thead, tbody);
-    section.appendChild(table);
+    section.appendChild(list);
     wrap.appendChild(section);
   }
-  const legend = el('p', 'help-legend', '門前=鳴くと成立しない。喰い下がり=鳴くと1翻下がる。');
-  wrap.prepend(legend);
   return wrap;
 }
 
@@ -116,12 +144,14 @@ export function renderFu() {
   const tbl = el('table', 'help-table');
   const th = el('thead');
   const thr = el('tr');
-  thr.append(el('th', '', ''), el('th', 'num', '2〜8'), el('th', 'num', '1・9・字牌'));
+  thr.append(el('th', '', ''), el('th', '', '例'), el('th', 'num', '2〜8'), el('th', 'num', '1・9・字牌'));
   th.appendChild(thr);
   const tb = el('tbody');
   for (const row of FU_RULES.sets) {
     const tr = el('tr');
-    tr.append(el('td', '', row.label), el('td', 'num', `+${row.chunchan}`), el('td', 'num', `+${row.yaochu}`));
+    const exCell = el('td', 'tiles-cell');
+    if (row.example) exCell.appendChild(tileRow([row.example], { size: 'xs' }));
+    tr.append(el('td', '', row.label), exCell, el('td', 'num', `+${row.chunchan}`), el('td', 'num', `+${row.yaochu}`));
     tb.appendChild(tr);
   }
   tbl.append(th, tb);
@@ -130,15 +160,13 @@ export function renderFu() {
 
   const ex = el('section', 'help-group');
   ex.appendChild(el('h3', '', '計算例'));
-  const et = el('table', 'help-table');
-  const etb = el('tbody');
   for (const row of FU_RULES.examples) {
-    const tr = el('tr');
-    tr.append(el('td', '', row.hand), el('td', 'num', row.calc));
-    etb.appendChild(tr);
+    const card = el('div', 'fu-example');
+    card.append(el('p', 'fu-example-hand', row.hand), el('p', 'fu-example-calc', row.calc));
+    if (row.tiles) card.appendChild(tileRow(row.tiles, { size: 'sm' }));
+    ex.appendChild(card);
   }
-  et.appendChild(etb);
-  ex.append(et, el('p', 'help-note', FU_RULES.rounding));
+  ex.appendChild(el('p', 'help-note', FU_RULES.rounding));
   wrap.appendChild(ex);
   return wrap;
 }
@@ -183,7 +211,7 @@ export function renderScore(rules) {
       const row = el('tr');
       row.appendChild(el('th', '', `${fu}符`));
       for (const han of SCORE_TABLE_HAN) {
-        const invalid = (fu === 25 && han < 2) || (fu === 20 && han < 2 && !dealer && false);
+        const invalid = fu === 25 && han < 2;
         const cell = el('td', 'num');
         if (invalid) { cell.textContent = '—'; }
         else {
@@ -212,7 +240,10 @@ export function createHelpScreen({ root, rules, onDone }) {
   const bodyHost = root.querySelector('#help-body');
   const doneButton = root.querySelector('#btn-help-done');
   let current = 'howto';
-  const renderers = { howto: renderHowTo, yaku: () => renderYaku(rules?.()), fu: renderFu, score: () => renderScore(rules?.()) };
+  const renderers = {
+    howto: renderHowTo, glossary: renderGlossary,
+    yaku: () => renderYaku(rules?.()), fu: renderFu, score: () => renderScore(rules?.()),
+  };
 
   function renderTabs() {
     tabsHost.replaceChildren();

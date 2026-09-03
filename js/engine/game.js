@@ -570,7 +570,8 @@ export class Game {
       if (turnDecision.action === 'kyuushu') {
         this.advanceDecisionState();
         this.decisionLog.appendPublicEvent('kyuushu', { actor: p });
-        if (this.shouldEmitReplayEvent()) await this.emit('kyuushu', { player: p });
+        // 九種九牌は手牌を倒して宣言する=公開情報。UIが牌を見せられるよう添える
+        if (this.shouldEmitReplayEvent()) await this.emit('kyuushu', { player: p, hand: pl.hand.concat([drawn]).map(t => ({ ...t })) });
         return await this.ryukyoku(true);
       }
 

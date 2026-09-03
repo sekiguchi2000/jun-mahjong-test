@@ -29,9 +29,9 @@ import {
 } from '../platform/desktop-settings.js?v=17';
 import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../engine/decision-coach.js?v=6';
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=20';
-import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=3';
-import { createCharacterSelect } from './character-select.js?v=1';
-import { createHelpScreen } from './help-screen.js?v=1';
+import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS } from '../engine/com-characters.js?v=4';
+import { createCharacterSelect } from './character-select.js?v=2';
+import { createHelpScreen } from './help-screen.js?v=2';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
   isGuideUnlocked, guideUnlockLevel, isComUnlocked, comUnlockLevel,
@@ -463,6 +463,7 @@ class UI {
     if (screen) {
       this.characterSelect = createCharacterSelect({
         root: screen,
+        seatDialog: $('#cast-seat-dialog'),
         level: () => this.progression.level,
         unlockLevel: comUnlockLevel,
         selection: () => this.opponents,
@@ -1686,7 +1687,9 @@ class UI {
           await this.pauseAwareDelay(450);
         })();
       case 'kyuushu':
-        return this.showCallout(data.player, '九種九牌');
+        // 九種九牌: 文字だけ一瞬出しても何が起きたか分からない(ユーザー報告 2026-09-03)。
+        // 倒した手牌を卓中央に見せ、確認できる時間(2.6秒)を取る
+        return this.showKyuushuReveal(data.player, data.hand ?? []);
       case 'draw':
         // ツモった本人に手番表示を移す(打牌イベントを待たない)
         if (data.state) {
@@ -1876,6 +1879,32 @@ class UI {
   }
 
   // --- 吹き出し ---
+  async showKyuushuReveal(player, hand) {
+    const el = $('#kyuushu-reveal');
+    if (!el) return this.showCallout(player, '九種九牌', 2000);
+    el.replaceChildren();
+    const title = document.createElement('div');
+    title.className = 'kyuushu-title';
+    title.textContent = `${SEAT_LABELS[player] ?? ''}の九種九牌`;
+    const note = document.createElement('div');
+    note.className = 'kyuushu-note';
+    note.textContent = '配牌に么九牌が9種類以上。流局して親が流れます';
+    const tiles = document.createElement('div');
+    tiles.className = 'kyuushu-tiles';
+    const sorted = [...hand].sort((a, b) => a.kind - b.kind);
+    for (const tile of sorted) {
+      const tileNode = tileEl(tile, { mini: false });
+      const isYaochu = tile.kind >= 27 || tile.kind % 9 === 0 || tile.kind % 9 === 8;
+      if (isYaochu) tileNode.classList.add('yaochu');
+      tiles.appendChild(tileNode);
+    }
+    el.append(title, tiles, note);
+    el.classList.remove('hidden');
+    void this.audio.playSfx('call-accent');
+    await this.pauseAwareDelay(2600);
+    el.classList.add('hidden');
+  }
+
   async showCallout(player, text, ms = 750) {
     const token = ++this.calloutSequence;
     const el = $('#callout');

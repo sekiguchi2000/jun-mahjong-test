@@ -1,9 +1,10 @@
-// character-select.js — 対戦相手選択画面 (v1 / 2026-09-03)
-// タイトルのOS標準<select>を置き換える。席(右/正面/左)を選んでキャラクターを割り当て、
-// 紹介文・打ち筋の傾向・解禁条件を同じ画面で見せる。
+// character-select.js — 対戦相手選択画面 (v2 / 2026-09-03 ユーザー指示でフロー変更)
+// 流れ: キャラをタップ → 上半分の紹介パネルに紹介文と「このキャラと対戦する」 →
+//       ボタンでポップアップ「どこの卓に座らせる？」→ 席(右/正面/左)を選んで着席。
+// 紹介パネルはスクロールさせない(傾向ゲージは出さない)。
 // ロジックは持たない: 選択結果は onChange で呼び出し側(main.js)へ返すだけ。
 
-import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc, STYLE_AXES } from '../engine/com-characters.js?v=3';
+import { COM_CHARACTERS, characterById, characterFaceSrc, characterFullSrc } from '../engine/com-characters.js?v=4';
 
 export const SEAT_NAMES = Object.freeze(['右の相手', '正面の相手', '左の相手']);
 export const SEAT_SHORT = Object.freeze(['右', '正面', '左']);
@@ -18,54 +19,64 @@ function el(tag, className, text) {
 /**
  * @param {object} options
  * @param {HTMLElement} options.root            #screen-characters
- * @param {() => number} options.level          現在のプレイヤーLv
+ * @param {HTMLDialogElement} options.seatDialog #cast-seat-dialog
+ * @param {() => number} options.level
  * @param {(id: string) => number} options.unlockLevel
  * @param {() => string[]} options.selection    現在の3席のキャラid
  * @param {(ids: string[]) => void} options.onChange
  * @param {() => void} [options.onDone]
  */
-export function createCharacterSelect({ root, level, unlockLevel, selection, onChange, onDone }) {
-  const seatsHost = root.querySelector('#cast-seats');
+export function createCharacterSelect({ root, seatDialog, level, unlockLevel, selection, onChange, onDone }) {
   const gridHost = root.querySelector('#cast-grid');
   const detailHost = root.querySelector('#cast-detail');
   const doneButton = root.querySelector('#btn-characters-done');
-  let activeSeat = 0;
+  const seatList = seatDialog?.querySelector('#cast-seat-list');
+  const seatCancel = seatDialog?.querySelector('#cast-seat-cancel');
   let shownId = null;
 
   const isUnlocked = id => level() >= unlockLevel(id);
+  const seatOf = id => selection().indexOf(id);
 
-  function seatOf(id) { return selection().indexOf(id); }
-
-  function assign(id) {
+  function assign(id, seat) {
     if (!isUnlocked(id)) return false;
     const ids = [...selection()];
     const already = ids.indexOf(id);
-    if (already === activeSeat) return true;
-    if (already >= 0) ids[already] = ids[activeSeat]; // 席の入れ替え
-    ids[activeSeat] = id;
+    if (already === seat) return true;
+    if (already >= 0) ids[already] = ids[seat]; // 席の入れ替え
+    ids[seat] = id;
     onChange(ids);
-    activeSeat = (activeSeat + 1) % 3;
     return true;
   }
 
-  function renderSeats() {
-    seatsHost.replaceChildren();
-    selection().forEach((id, seat) => {
-      const character = characterById(id);
-      const button = el('button', 'cast-seat');
+  function faceSpan(character, className = 'cast-face') {
+    const face = el('span', className);
+    face.style.backgroundImage = `url('${characterFaceSrc(character)}')`;
+    return face;
+  }
+
+  function openSeatDialog(character) {
+    if (!seatDialog || !seatList) return;
+    seatList.replaceChildren();
+    const current = seatOf(character.id);
+    selection().forEach((occupantId, seat) => {
+      const occupant = characterById(occupantId);
+      const button = el('button', 'cast-seat-choice');
       button.type = 'button';
       button.dataset.seat = String(seat);
-      button.setAttribute('aria-pressed', String(seat === activeSeat));
-      if (seat === activeSeat) button.classList.add('active');
-      const face = el('span', `cast-face ${character.portrait}`);
-      face.style.backgroundImage = `url('${characterFaceSrc(character)}')`;
-      const copy = el('span', 'cast-seat-copy');
-      copy.append(el('small', '', SEAT_NAMES[seat]), el('strong', '', character.name));
-      button.append(face, copy);
-      button.addEventListener('click', () => { activeSeat = seat; shownId = id; render(); });
-      button.addEventListener('focus', () => { if (shownId !== id) { shownId = id; renderDetail(); } });
-      seatsHost.appendChild(button);
+      if (seat === current) button.classList.add('current');
+      if (seat === 0) button.setAttribute('data-gamepad-default', '');
+      const copy = el('span', 'cast-seat-choice-copy');
+      copy.append(el('strong', '', SEAT_NAMES[seat]),
+        el('small', '', seat === current ? `${character.name}が着席中` : `いまは ${occupant.name}`));
+      button.append(faceSpan(occupant, 'cast-face small'), copy);
+      button.addEventListener('click', () => {
+        assign(character.id, seat);
+        seatDialog.close();
+        render();
+      });
+      seatList.appendChild(button);
     });
+    seatDialog.showModal();
   }
 
   function renderGrid() {
@@ -79,35 +90,22 @@ export function createCharacterSelect({ root, level, unlockLevel, selection, onC
       card.classList.toggle('locked', !unlocked);
       card.classList.toggle('assigned', seat >= 0);
       card.classList.toggle('shown', character.id === shownId);
-      if (character.id === selection()[activeSeat]) card.setAttribute('data-gamepad-default', '');
-      const face = el('span', 'cast-face');
-      face.style.backgroundImage = `url('${characterFaceSrc(character)}')`;
+      if (character.id === shownId) card.setAttribute('data-gamepad-default', '');
       const name = el('strong', 'cast-card-name', unlocked ? character.name : '？？？');
       const sub = el('small', 'cast-card-sub', unlocked ? character.title : `Lv${unlockLevel(character.id)}で解禁`);
-      card.append(face, name, sub);
+      card.append(faceSpan(character), name, sub);
       if (seat >= 0) card.appendChild(el('i', 'cast-badge', SEAT_SHORT[seat]));
       card.setAttribute('aria-label', unlocked
         ? `${character.name}（${character.title}）${seat >= 0 ? '・' + SEAT_NAMES[seat] : ''}`
         : `未解禁のキャラクター。Lv${unlockLevel(character.id)}で解禁`);
-      card.addEventListener('click', () => {
-        shownId = character.id;
-        if (unlocked) assign(character.id);
-        render();
-      });
-      card.addEventListener('focus', () => { if (shownId !== character.id) { shownId = character.id; renderDetail(); renderGridState(); } });
+      card.addEventListener('click', () => { shownId = character.id; render(); });
       gridHost.appendChild(card);
-    }
-  }
-
-  function renderGridState() {
-    for (const card of gridHost.querySelectorAll('.cast-card')) {
-      card.classList.toggle('shown', card.dataset.id === shownId);
     }
   }
 
   function renderDetail() {
     detailHost.replaceChildren();
-    const character = characterById(shownId) ?? characterById(selection()[activeSeat]);
+    const character = characterById(shownId) ?? characterById(selection()[0]);
     if (!character) return;
     const unlocked = isUnlocked(character.id);
     const portrait = el('div', 'cast-portrait');
@@ -118,46 +116,35 @@ export function createCharacterSelect({ root, level, unlockLevel, selection, onC
       body.append(
         el('h3', 'cast-detail-name', '？？？'),
         el('p', 'cast-detail-title', `Lv${unlockLevel(character.id)}で解禁`),
-        el('p', 'cast-intro', '対局に勝ってレベルを上げると、この打ち手が卓に着きます。'),
+        el('p', 'cast-intro', '対局に勝ってレベルを上げると、この打ち手が卓に着きます'),
       );
     } else {
-      const head = el('div', 'cast-detail-head');
+      const seat = seatOf(character.id);
       const name = el('h3', 'cast-detail-name', character.name);
       name.appendChild(el('small', '', character.kana));
-      head.append(name, el('p', 'cast-detail-title', character.title));
+      const title = el('p', 'cast-detail-title', character.title);
       const quote = el('p', 'cast-quote', `「${character.quote}」`);
       const intro = el('p', 'cast-intro', character.intro);
-      const axes = el('dl', 'cast-axes');
-      for (const axis of STYLE_AXES) {
-        const value = character.style?.[axis.key] ?? 3;
-        const dt = el('dt', '', axis.label);
-        const dd = el('dd', '');
-        dd.setAttribute('aria-label', `${axis.label} ${value}/5`);
-        for (let i = 1; i <= 5; i += 1) dd.appendChild(el('i', i <= value ? 'on' : ''));
-        axes.append(dt, dd);
-      }
-      const seat = seatOf(character.id);
       const action = el('button', 'btn primary cast-assign');
       action.type = 'button';
-      action.textContent = seat >= 0 ? `${SEAT_NAMES[seat]}に着席中` : `${SEAT_NAMES[activeSeat]}にする`;
-      action.disabled = seat >= 0;
-      action.addEventListener('click', () => { assign(character.id); render(); });
-      body.append(head, quote, intro, axes, action);
+      action.textContent = seat >= 0 ? `${SEAT_NAMES[seat]}に着席中（席を変える）` : 'このキャラと対戦する';
+      action.addEventListener('click', () => openSeatDialog(character));
+      body.append(name, title, quote, intro, action);
     }
     detailHost.append(portrait, body);
   }
 
   function render() {
-    if (!shownId) shownId = selection()[activeSeat];
-    renderSeats();
-    renderGrid();
+    if (!shownId) shownId = selection()[0];
     renderDetail();
+    renderGrid();
   }
 
   doneButton?.addEventListener('click', () => onDone?.());
+  seatCancel?.addEventListener('click', () => seatDialog?.close());
 
   return {
     render,
-    open() { activeSeat = 0; shownId = selection()[0]; render(); },
+    open() { shownId = selection()[0]; render(); },
   };
 }
