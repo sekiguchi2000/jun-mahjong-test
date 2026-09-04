@@ -1373,6 +1373,7 @@ class UI {
     this.riichiStickSequence += 1;
     $('#riichi-stick-cinematic')?.classList.add('hidden');
     $('#riichi-cutin')?.classList.add('hidden');
+    this.holdPoints = null;
     $('#screen-game')?.classList.remove('win-cinematic-shake', 'cine-shake', 'cine-shake-strong', 'cine-shake-max');
     $('#callout')?.classList.add('hidden');
   }
@@ -1585,6 +1586,11 @@ class UI {
   // Gameがawaitするので、Promiseを返せば進行が止まる
   async onEvent(type, data) {
     await this.waitWhilePaused();
+    // 開発用: ?spectate-log=1 で通し観戦の録画ツール(tools/capture-spectate-v124.cjs)へ進行イベントを渡す
+    if (Array.isArray(window.__JUN_EVENT_LOG__)) {
+      window.__JUN_EVENT_LOG__.push({ t: performance.now(), type, player: data?.player ?? data?.winner ?? null,
+        riichi: data?.riichi === true, action: data?.action ?? null, limit: data?.score?.limitName ?? null, total: data?.score?.total ?? null });
+    }
     switch (type) {
       case 'dealerCeremony':
         return this.showDealerCeremony(data);
@@ -1951,9 +1957,15 @@ class UI {
       }
       const canvas = $('#webgl-tabletop');
       if (canvas && canvas.getBoundingClientRect().width > 0) {
+        // 卓中央の装置の、宣言者側の縁へ置く(実卓で自分の前に棒を出す位置)
         const r = canvas.getBoundingClientRect();
         const w = Math.min(64, r.width * 0.05);
-        return { left: r.left + r.width / 2 - w / 2, top: r.top + r.height * 0.5 - 4, width: w, height: 8 };
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height * 0.54;
+        const dx = r.width * 0.085;
+        const dy = r.height * 0.11;
+        const offset = [[0, dy], [dx, 0], [0, -dy], [-dx, 0]][player] ?? [0, 0];
+        return { left: cx + offset[0] - w / 2, top: cy + offset[1] - 4, width: w, height: 8 };
       }
       return null;
     };
@@ -2019,9 +2031,12 @@ class UI {
   }
 
   // --- 卓の描画 ---
-  renderBoard(state) {
-    if (!state) return;
+  renderBoard(rawState) {
+    if (!rawState) return;
+    // 儀式中(和了演出→リザルトで役を数える間)は点棒表示を動かさない(通し観戦 2026-09-04: 点差が先にバレていた)
+    const state = Array.isArray(this.holdPoints) ? { ...rawState, points: this.holdPoints } : rawState;
     this.lastState = state;
+    this.lastRenderedPoints = [...(rawState.points ?? [])];
     if (this.spectate) { this.myHand = this.game.handOf(0); this.myDrawn = null; this.renderHand(); }
     this.renderWebGLTabletop(state);
 
@@ -2743,6 +2758,7 @@ class UI {
     await this.showWinSuspense(data);
     this.tabletopDrawnSeat = null;
     this.tabletopKakanPreview = null;
+    this.holdPoints = this.lastState?.points ? [...this.lastState.points] : null;
     this.renderBoard(data.state);
     this.playCharacterVoice(winner, loser === null ? 'tsumo' : 'ron', { critical: true });
     await this.showWinCinematic(data);
@@ -2803,9 +2819,12 @@ class UI {
       for (const t of data.uraInd) dl.appendChild(tileEl(t));
     }
     await done;
+    this.holdPoints = null;
+    this.renderBoard(data.state);
   }
 
   async showRyukyoku(data) {
+    this.holdPoints = this.lastState?.points ? [...this.lastState.points] : null;
     this.renderBoard(data.state);
     let html = `<h2>流局</h2>`;
     if (data.tochu) html += `<div class="win-sub">途中流局</div>`;
@@ -2829,6 +2848,8 @@ class UI {
       }
     }
     await done;
+    this.holdPoints = null;
+    this.renderBoard(data.state);
   }
 
   async showNagashi(data) {

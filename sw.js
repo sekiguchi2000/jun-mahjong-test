@@ -1,5 +1,5 @@
 // sw.js — オフライン対応 (HTTPSで配信されたときのみ登録される)
-const CACHE = 'jun-mahjong-v125-default-swap';
+const CACHE = 'jun-mahjong-v126-ceremony-hold';
 const TILE_FACE_FILES = [
   'Man1.svg', 'Man2.svg', 'Man3.svg', 'Man4.svg', 'Man5.svg', 'Man5-Dora.svg', 'Man6.svg', 'Man7.svg', 'Man8.svg', 'Man9.svg',
   'Pin1.svg', 'Pin2.svg', 'Pin3.svg', 'Pin4.svg', 'Pin5.svg', 'Pin5-Dora.svg', 'Pin6.svg', 'Pin7.svg', 'Pin8.svg', 'Pin9.svg',
@@ -16,7 +16,7 @@ const ASSETS = [
   '.', 'index.html', 'css/style.css?v=14', 'css/table-v9.css?v=16',
   'css/tokens-v15.css?v=15', 'css/learning-modes-v15.css?v=18', 'css/product-ui-v16.css?v=1',
   'css/product-ui-v17.css?v=4', 'css/are-report-v1.css?v=4', 'css/stats-v1.css?v=1', 'css/win-cinematic-v1.css?v=4', 'css/tile-3d-v1.css?v=1', 'css/riichi-stick-v1.css?v=1', 'css/title-cinematic-v1.css?v=2', 'css/table-physical-v2.css?v=1', 'css/table-geometry-v3.css?v=1', 'css/table-geometry-v4.css?v=1', 'css/tile-cuboid-v2.css?v=1', 'css/tabletop-projection-v1.css?v=1', 'css/webgl-tabletop-v1.css?v=6', 'css/progression-ui-v83.css?v=1', 'css/characters-v2.css?v=2', 'css/help-v1.css?v=2', 'css/cinematics-v1.css?v=1', 'manifest.webmanifest',
-  'js/ui/main.js?v=72', 'js/ui/character-select.js?v=4', 'js/ui/help-screen.js?v=2', 'js/ui/cinematics.js?v=1', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=2', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=6', 'js/ui/gameplay-controls.js?v=12',
+  'js/ui/main.js?v=73', 'js/ui/character-select.js?v=4', 'js/ui/help-screen.js?v=2', 'js/ui/cinematics.js?v=1', 'js/ui/stats-store.js?v=1', 'js/ui/are-report.js?v=2', 'js/ui/register-sw.js?v=14', 'js/ui/tilesvg.js?v=10', 'js/ui/tile-cuboid.js?v=2', 'js/ui/tabletop-projection.js?v=1', 'js/ui/webgl-tabletop.js?v=6', 'js/ui/gameplay-controls.js?v=12',
   'js/vendor/three/three.module.js', 'js/vendor/three/three.core.js',
   'js/vendor/three/addons/geometries/RoundedBoxGeometry.js',
   'js/ui/win-presentation.js?v=3',
