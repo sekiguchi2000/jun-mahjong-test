@@ -146,7 +146,10 @@ export async function playRiichiCinematic({ host, player, name, portraitSrc, lin
     ], { duration: 420, easing: 'ease-out', fill: 'both' });
     await delay(720 * .18 + 120);
     onStickLanded?.();
-    await flight.finished.catch(() => {});
+    // animation.finished は非表示/バックグラウンドのタブでタイムラインが止まると解決しない
+    // (UI通しストレス 2026-09-05: 30半荘中29回で #riichi-cutin が15秒以上残った)。時間で進める
+    flight.cancel();
+    flyer.style.transform = `translate(-50%, -50%) translate(${dx}px, ${dy}px) rotate(360deg) scale(1)`;
     flyer.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'both' });
     await delay(160);
   } else {

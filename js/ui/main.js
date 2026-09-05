@@ -31,7 +31,7 @@ import { buildTurnCoaching, buildClaimCoaching, dominantKeepReason } from '../en
 import { GUIDE_STYLES } from '../engine/decision-evaluator.js?v=20';
 import { COM_CHARACTERS, characterById, DEFAULT_OPPONENTS, characterFullSrc } from '../engine/com-characters.js?v=6';
 import { createCharacterSelect } from './character-select.js?v=4';
-import { playRiichiCinematic, buildWinCinematic, playResultReveal } from './cinematics.js?v=1';
+import { playRiichiCinematic, buildWinCinematic, playResultReveal } from './cinematics.js?v=2';
 import { createHelpScreen } from './help-screen.js?v=2';
 import {
   ProgressionTracker, loadProgression, saveProgression, levelFromExp, levelLabel, levelProgress,
